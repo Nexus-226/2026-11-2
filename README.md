@@ -1,6 +1,6 @@
 # Pet Agent
 
-三人协作的宠物助手项目。前端提供宠物资料演示页面，后端提供健康检查、宠物资料 CRUD 和基于 MockProvider 的 Agent 对话接口；真实 LLM 接入、前后端完整联调与附近服务仍待完成。
+三人协作的宠物助手项目。前端提供宠物资料和聊天演示页面，后端提供健康检查、宠物资料 CRUD 和基于 MockProvider 的 Agent 对话接口；真实 LLM 接入、前后端完整联调与附近服务仍待完成。
 
 ## 目录与分工
 
@@ -33,7 +33,7 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 
 | 部分 | 约定 | 当前状态 |
 |---|---|---|
-| 前端 | React + TypeScript + Vite | 宠物资料页面支持本地演示；真实接口联调和其他页面待开发 |
+| 前端 | React + TypeScript + Vite | 宠物资料和聊天页面支持演示；真实接口联调待完成 |
 | 后端 | Python + FastAPI + Pydantic | 健康检查、宠物资料 CRUD、统一错误响应、对话路由和会话消息持久化已实现 |
 | Agent | Python Agent 模块、受控工具和 LLM Provider | Agent Runtime、宠物工具、对话编排和 MockProvider 已接入；真实模型待接入 |
 | 数据 | SQLite + SQLAlchemy 2 + Alembic | 本地演示用户与宠物资料通过 SQLite/SQLAlchemy 持久化；Alembic 迁移已配置 |
@@ -80,7 +80,11 @@ npm run dev
 
 前端地址以 Vite 的终端输出为准。开发时 `/api` 和 `/health` 会代理至 `http://127.0.0.1:8000`，可通过前端环境变量 `VITE_API_PROXY_TARGET` 修改代理目标。
 
-宠物资料页默认使用本地演示数据，仅保存在当前浏览器，不会同步后端。在 `frontend/.env.local` 中设置 `VITE_PET_DATA_SOURCE=api` 并重新启动前端，即切换到 `/api/v1/pets`；真实接口尚待联调。接口失败时页面显示错误，不会自动回退到演示数据。切换模式不会迁移已有演示资料。
+宠物资料页默认使用本地演示数据，仅保存在当前浏览器，不会同步后端。在 `frontend/.env.local` 中设置 `VITE_PET_DATA_SOURCE=api` 并重新启动前端，即切换到 `/api/v1/pets`；前后端仍需完成联调。接口失败时页面显示错误，不会自动回退到演示数据。切换模式不会迁移已有演示资料。
+
+聊天页默认显示固定的演示回复，不连接真实模型，聊天记录只保留在当前页面。在 `frontend/.env.local` 设置 `VITE_CHAT_DATA_SOURCE=api` 并重启前端，即可切换到已实现的 `POST /api/v1/chat`；当前后端使用 MockProvider，不会生成真实模型回复，请求失败时前端也不会自动生成模拟回复。若对话需要关联宠物，还应设置 `VITE_PET_DATA_SOURCE=api`，并启动后端：本地演示宠物的 ID 不能用于后端对话接口。
+
+取消操作只停止前端等待，服务端可能仍在处理；超时或中断后重试可能产生重复请求。前后端仍需联调会话 ID、宠物 ID、错误格式和取消行为。
 
 `.env.example` 仅列出后续接入可能需要的配置；数据库连接可通过环境变量 `PET_AGENT_DATABASE_URL` 设置。真实密钥和本地数据库不要提交到 Git。
 
@@ -92,6 +96,7 @@ python -m pytest backend/tests
 
 # frontend 目录，已安装依赖
 npm run build
+npm test
 ```
 
 Python 使用 Ruff 做检查与格式化，前端使用 Prettier；版本分别固定在 `backend/pyproject.toml` 和 `frontend/package-lock.json`。对本次改动的文件单独运行命令，例如：
