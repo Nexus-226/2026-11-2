@@ -118,3 +118,35 @@ def test_qwen_provider_maps_bad_json_to_provider_error() -> None:
             tool_results=[],
         )
     assert exc_info.value.code == "UPSTREAM_ERROR"
+
+
+def test_qwen_provider_maps_malformed_tool_call_to_provider_error() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [{"id": "call_1"}],
+                        }
+                    }
+                ]
+            },
+        )
+    )
+    provider = QwenProvider(
+        api_key="test-key",
+        base_url="https://example.com/compatible-mode/v1",
+        transport=transport,
+    )
+    with pytest.raises(ProviderError) as exc_info:
+        provider.next_turn(
+            system_prompt="sys",
+            user_message="hi",
+            tools=[_get_pet_profile_tool()],
+            tool_results=[],
+        )
+    assert exc_info.value.code == "UPSTREAM_ERROR"

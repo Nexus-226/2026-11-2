@@ -96,19 +96,19 @@ class QwenProvider:
         message = self._request(tools_payload)
         tool_calls = message.get("tool_calls")
         if tool_calls:
+            try:
+                call = tool_calls[0]
+                function = call["function"]
+                name = function["name"]
+                call_id = call["id"]
+                args = json.loads(function.get("arguments") or "{}")
+            except (KeyError, IndexError, TypeError, ValueError) as exc:
+                raise ProviderError("UPSTREAM_ERROR", "模型工具调用格式异常") from exc
             self._messages.append(
                 {"role": "assistant", "content": None, "tool_calls": tool_calls}
             )
-            call = tool_calls[0]
-            self._pending_tool_call_id = call["id"]
-            function = call["function"]
-            try:
-                args = json.loads(function.get("arguments") or "{}")
-            except json.JSONDecodeError:
-                args = {}
-            return ProviderTurn(
-                tool_call=ToolCallRequest(name=function["name"], args=args)
-            )
+            self._pending_tool_call_id = call_id
+            return ProviderTurn(tool_call=ToolCallRequest(name=name, args=args))
 
         content = message.get("content") or ""
         self._messages.append({"role": "assistant", "content": content})
