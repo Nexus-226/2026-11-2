@@ -4,7 +4,8 @@ from uuid import UUID
 from app.agent.chat import run_chat
 from app.agent.providers.base import ProviderTurn
 from app.agent.providers.mock import MockProvider
-from app.agent.schemas import Pet, ToolCallRequest
+from app.agent.schemas import ToolCallRequest
+from app.schemas.pet import PetRead
 
 PET_ID = UUID("b8f34f24-f5cf-4b5c-8d40-073541725a11")
 
@@ -12,18 +13,18 @@ PET_ID = UUID("b8f34f24-f5cf-4b5c-8d40-073541725a11")
 class FakePetService:
     """测试用的宠物 Service，替代 B 尚未提供的真实实现。"""
 
-    def __init__(self, pets: list[Pet] | None = None) -> None:
+    def __init__(self, pets: list[PetRead] | None = None) -> None:
         self._pets = {p.id: p for p in (pets or [])}
 
-    def get_pet(self, pet_id: UUID) -> Pet | None:
+    def get_pet(self, pet_id: UUID) -> PetRead | None:
         return self._pets.get(pet_id)
 
-    def list_pets(self) -> list[Pet]:
+    def list_pets(self) -> list[PetRead]:
         return list(self._pets.values())
 
 
-def _pet() -> Pet:
-    return Pet(
+def _pet() -> PetRead:
+    return PetRead(
         id=PET_ID,
         name="豆豆",
         species="dog",
