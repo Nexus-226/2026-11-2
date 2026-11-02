@@ -10,3 +10,10 @@ dist/
 build/
 __pycache__/
 .pytest_cache/
+.venv/
+*.egg-info/
+.coverage
+coverage.xml
+*.sqlite3
+*.tsbuildinfo
+.DS_Store

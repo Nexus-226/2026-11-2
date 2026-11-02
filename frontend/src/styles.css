@@ -1,0 +1,30 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #20241f; background: #f4f1e8; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+main { width: min(980px, calc(100% - 32px)); margin: 40px auto; }
+header { display: flex; justify-content: space-between; gap: 32px; align-items: end; border-bottom: 1px solid #b8b4a8; padding-bottom: 24px; }
+h1 { font-size: clamp(3rem, 10vw, 6rem); line-height: .85; margin: 8px 0 0; letter-spacing: -.06em; }
+h2 { font-size: 1.4rem; }
+header p { max-width: 360px; color: #62665e; }
+.eyebrow { color: #f05a38; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; }
+nav { display: flex; gap: 8px; margin: 28px 0; flex-wrap: wrap; }
+nav button { border: 1px solid #20241f; background: transparent; padding: 10px 14px; border-radius: 999px; }
+nav button.active, form button { background: #20241f; color: white; }
+.status { background: #fff4cc; padding: 12px 16px; border-left: 4px solid #f0bd38; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+form, article, .answer { background: #fffdf7; padding: 22px; border: 1px solid #d8d3c6; border-radius: 16px; }
+label { display: grid; gap: 6px; margin: 12px 0; font-weight: 700; }
+input, textarea, select { width: 100%; padding: 11px; border: 1px solid #aaa69b; border-radius: 9px; background: white; }
+textarea { min-height: 90px; resize: vertical; }
+form button { border: 0; border-radius: 9px; padding: 11px 16px; }
+.pet { width: 100%; display: grid; gap: 5px; text-align: left; background: white; border: 1px solid #d8d3c6; padding: 14px; border-radius: 12px; margin-bottom: 10px; }
+.pet span, .pet small { color: #62665e; }
+.chat { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.answer { margin-top: 16px; border-color: #f05a38; }
+.inline { display: flex; gap: 10px; }
+.places { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+.places article { display: grid; gap: 8px; }
+.places span { color: #f05a38; font-weight: 800; }
+@media (max-width: 700px) { header { display: block; } .grid, .places { grid-template-columns: 1fr; } .chat, .inline { grid-template-columns: 1fr; display: grid; } }
