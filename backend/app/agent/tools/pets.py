@@ -8,20 +8,21 @@ from __future__ import annotations
 
 from app.agent.errors import DomainError
 from app.agent.registry import Tool
-from app.agent.schemas import GetPetProfileInput, ListPetsInput, Pet
+from app.agent.schemas import GetPetProfileInput, ListPetsInput
 from app.agent.service_protocol import PetService
+from app.schemas.pet import PetRead
 
 
 def make_pet_tools(service: PetService) -> list[Tool]:
     """基于 Service 构造宠物资料工具。"""
 
-    def get_pet_profile(inp: GetPetProfileInput) -> Pet:
+    def get_pet_profile(inp: GetPetProfileInput) -> PetRead:
         pet = service.get_pet(inp.pet_id)
         if pet is None:
             raise DomainError("PET_NOT_FOUND", "未找到宠物")
         return pet
 
-    def list_pets(_inp: ListPetsInput) -> list[Pet]:
+    def list_pets(_inp: ListPetsInput) -> list[PetRead]:
         return service.list_pets()
 
     return [

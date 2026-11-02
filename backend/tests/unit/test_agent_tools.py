@@ -2,8 +2,9 @@ from datetime import date, datetime, timezone
 from uuid import UUID
 
 from app.agent.runtime import AgentRuntime
-from app.agent.schemas import Pet, ToolCallRequest
+from app.agent.schemas import ToolCallRequest
 from app.agent.tools import build_default_registry
+from app.schemas.pet import PetRead
 
 PET_ID = UUID("b8f34f24-f5cf-4b5c-8d40-073541725a11")
 
@@ -11,17 +12,17 @@ PET_ID = UUID("b8f34f24-f5cf-4b5c-8d40-073541725a11")
 class FakePetService:
     """测试用的宠物 Service，替代 B 尚未实现的真实实现。"""
 
-    def __init__(self, pets: list[Pet] | None = None) -> None:
+    def __init__(self, pets: list[PetRead] | None = None) -> None:
         self._pets = {p.id: p for p in (pets or [])}
 
-    def get_pet(self, pet_id: UUID) -> Pet | None:
+    def get_pet(self, pet_id: UUID) -> PetRead | None:
         return self._pets.get(pet_id)
 
-    def list_pets(self) -> list[Pet]:
+    def list_pets(self) -> list[PetRead]:
         return list(self._pets.values())
 
 
-def _pet(**overrides: object) -> Pet:
+def _pet(**overrides: object) -> PetRead:
     base: dict[str, object] = {
         "id": PET_ID,
         "name": "豆豆",
@@ -33,7 +34,7 @@ def _pet(**overrides: object) -> Pet:
         "updated_at": datetime(2026, 11, 2, 8, 0, 0, tzinfo=timezone.utc),
     }
     base.update(overrides)
-    return Pet(**base)
+    return PetRead(**base)
 
 
 def test_get_pet_profile_returns_pet() -> None:
@@ -42,7 +43,7 @@ def test_get_pet_profile_returns_pet() -> None:
         [ToolCallRequest(name="get_pet_profile", args={"pet_id": str(PET_ID)})]
     )[0]
     assert result.status == "success"
-    assert isinstance(result.data, Pet)
+    assert isinstance(result.data, PetRead)
     assert result.data.name == "豆豆"
 
 
