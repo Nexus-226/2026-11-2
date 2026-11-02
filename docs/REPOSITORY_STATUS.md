@@ -15,4 +15,4 @@
 
 指南中列出的 `ChatPage.tsx`、`runtime.py`、`pet_service.py`、`alembic.ini` 等具体文件目前未创建；它们属于后续实现，并非已配置完成。指南中的 Docker Compose 标注为可选，目前未配置。P0 验收所需的宠物 CRUD、真实对话、错误处理、取消/超时及核心测试都尚未完成。
 
-接口字段和职责以 [API.md](API.md) 与 [TECH_STACK.md](TECH_STACK.md) 的草案为准，三人评审后再作为实施约定。
+宠物资料的 `birthday`、`notes` 字段已决定；其他接口和技术选型见 [API.md](API.md) 与 [TECH_STACK.md](TECH_STACK.md)，仍需三人评审确认。
