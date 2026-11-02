@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from app.agent.providers.base import ProviderTurn
+from app.agent.registry import Tool
 from app.agent.schemas import ToolResult
 
 
@@ -19,7 +20,7 @@ class MockProvider:
         *,
         system_prompt: str,
         user_message: str,
-        tool_descriptions: str,
+        tools: list[Tool],
         tool_results: list[ToolResult],
     ) -> ProviderTurn:
         if self._index < len(self._turns):

@@ -1,6 +1,6 @@
 """LLM Provider 抽象（A 负责）。
 
-P0-4 先用 MockProvider 开发；之后接入真实模型时实现同一接口即可。
+P0-4 先用 MockProvider 开发；接入真实模型时实现同一接口即可。
 接口不依赖某一家供应商，连接和错误边界与 B 对齐。
 """
 
@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.agent.registry import Tool
 from app.agent.schemas import ToolCallRequest, ToolResult
 
 
@@ -28,6 +29,6 @@ class LLMProvider(Protocol):
         *,
         system_prompt: str,
         user_message: str,
-        tool_descriptions: str,
+        tools: list[Tool],
         tool_results: list[ToolResult],
     ) -> ProviderTurn: ...
