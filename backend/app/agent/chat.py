@@ -12,9 +12,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.agent.prompts import SYSTEM_PROMPT, build_tool_descriptions
+from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.providers.base import LLMProvider
-from app.agent.providers.mock import MockProvider
+from app.agent.providers.factory import build_default_provider
 from app.agent.runtime import MAX_TOOL_CALLS_PER_TURN, AgentRuntime
 from app.agent.schemas import ToolResult
 from app.agent.service_protocol import PetService
@@ -45,12 +45,12 @@ def run_chat(
 ) -> ChatReply:
     registry = build_default_registry(service)
     runtime = AgentRuntime(registry, max_tool_calls=max_tool_calls)
-    provider = provider or MockProvider()
+    provider = provider or build_default_provider()
+    tools = [registry.get(name) for name in registry.names()]
 
     system = SYSTEM_PROMPT
     if pet_id is not None:
         system += f" 当前关联宠物 pet_id={pet_id}。"
-    tool_descriptions = build_tool_descriptions(registry)
 
     summaries: list[ToolCallSummary] = []
     results: list[ToolResult] = []
@@ -60,7 +60,7 @@ def run_chat(
         turn = provider.next_turn(
             system_prompt=system,
             user_message=message,
-            tool_descriptions=tool_descriptions,
+            tools=tools,
             tool_results=results,
         )
         if turn.reply is not None:
