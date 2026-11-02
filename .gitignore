@@ -2,6 +2,9 @@
 work/
 outputs/
 
+# IDE 本地配置
+.idea/
+
 # 本地密钥与常见生成文件
 .env
 .env.*
