@@ -1,10 +1,13 @@
+import time
 from datetime import date, datetime, timezone
 from uuid import UUID
 
 from app.agent.chat import run_chat
 from app.agent.providers.base import ProviderTurn
 from app.agent.providers.mock import MockProvider
-from app.agent.schemas import ToolCallRequest
+from app.agent.registry import Tool, ToolRegistry
+from app.agent.runtime import AgentRuntime
+from app.agent.schemas import ListPetsInput, ToolCallRequest
 from app.schemas.pet import PetRead
 
 PET_ID = UUID("b8f34f24-f5cf-4b5c-8d40-073541725a11")
@@ -91,3 +94,28 @@ def test_run_chat_replies_after_three_tool_calls() -> None:
     assert reply.reply == "已为你列出宠物。"
     assert len(reply.tool_calls) == 3
     assert all(t.status == "success" for t in reply.tool_calls)
+
+
+def test_tool_timeout_returns_without_waiting_for_tool() -> None:
+    def slow_tool(_inp: ListPetsInput) -> str:
+        time.sleep(0.3)
+        return "done"
+
+    registry = ToolRegistry()
+    registry.register(
+        Tool(
+            name="slow",
+            description="慢工具",
+            input_schema=ListPetsInput,
+            func=slow_tool,
+        )
+    )
+    runtime = AgentRuntime(registry, tool_timeout_seconds=0.05)
+
+    start = time.monotonic()
+    result = runtime.run_tools([ToolCallRequest(name="slow", args={})])[0]
+    elapsed = time.monotonic() - start
+
+    assert result.status == "error"
+    assert result.error_code == "UPSTREAM_TIMEOUT"
+    assert elapsed < 0.2  # 不等待 0.3s 的 sleep，证明超时真正生效

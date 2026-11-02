@@ -88,10 +88,14 @@ class AgentRuntime:
     ) -> Any:
         if self.tool_timeout_seconds is None:
             return func(validated)
-        with ThreadPoolExecutor(max_workers=1) as pool:
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
             future = pool.submit(func, validated)
             try:
                 return future.result(timeout=self.tool_timeout_seconds)
             except FuturesTimeoutError:
                 future.cancel()
                 raise ToolTimeout from None
+        finally:
+            # wait=False：超时后不阻塞等待仍在运行的线程，保证超时真正限制等待时间。
+            pool.shutdown(wait=False, cancel_futures=True)
