@@ -76,3 +76,18 @@ def test_run_chat_direct_reply_no_tool() -> None:
     reply = run_chat("你好", None, FakePetService([]), provider=provider)
     assert reply.reply == "你好！"
     assert reply.tool_calls == []
+
+
+def test_run_chat_replies_after_three_tool_calls() -> None:
+    turns = [
+        ProviderTurn(tool_call=ToolCallRequest(name="list_pets", args={}))
+        for _ in range(3)
+    ]
+    turns.append(ProviderTurn(reply="已为你列出宠物。"))
+    provider = MockProvider(turns=turns)
+    reply = run_chat(
+        "我有几只宠物？", None, FakePetService([_pet()]), provider=provider
+    )
+    assert reply.reply == "已为你列出宠物。"
+    assert len(reply.tool_calls) == 3
+    assert all(t.status == "success" for t in reply.tool_calls)

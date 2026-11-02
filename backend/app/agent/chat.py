@@ -54,8 +54,9 @@ def run_chat(
 
     summaries: list[ToolCallSummary] = []
     results: list[ToolResult] = []
+    tool_call_count = 0
 
-    for _ in range(max_tool_calls):
+    while True:
         turn = provider.next_turn(
             system_prompt=system,
             user_message=message,
@@ -66,10 +67,12 @@ def run_chat(
             return ChatReply(reply=turn.reply, tool_calls=summaries)
         if turn.tool_call is None:
             return ChatReply(reply="抱歉，我暂时无法回答。", tool_calls=summaries)
+        if tool_call_count >= max_tool_calls:
+            return ChatReply(
+                reply="抱歉，这个问题需要更多信息，我暂时无法回答。",
+                tool_calls=summaries,
+            )
         result = runtime.run_tools([turn.tool_call])[0]
+        tool_call_count += 1
         results.append(result)
         summaries.append(ToolCallSummary(name=result.name, status=result.status))
-
-    return ChatReply(
-        reply="抱歉，这个问题需要更多信息，我暂时无法回答。", tool_calls=summaries
-    )
