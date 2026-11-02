@@ -36,9 +36,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
         engine.dispose()
 
 
-def test_pet_crud_persists_across_requests(
-    client: TestClient, tmp_path: Path
-) -> None:
+def test_pet_crud_persists_across_requests(client: TestClient, tmp_path: Path) -> None:
     assert client.get("/api/v1/pets").json() == []
 
     created_response = client.post(
@@ -167,9 +165,7 @@ def test_invalid_json_and_missing_pet_return_contract_errors(
     assert invalid_json.status_code == 400
     assert invalid_json.json()["error"]["code"] == "BAD_REQUEST"
 
-    missing_pet = client.get(
-        "/api/v1/pets/00000000-0000-0000-0000-000000000001"
-    )
+    missing_pet = client.get("/api/v1/pets/00000000-0000-0000-0000-000000000001")
     assert missing_pet.status_code == 404
     assert missing_pet.json()["error"]["code"] == "PET_NOT_FOUND"
 

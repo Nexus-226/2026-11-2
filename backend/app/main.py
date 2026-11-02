@@ -1,6 +1,6 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-import logging
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -77,9 +77,7 @@ async def handle_validation_error(
     is_invalid_json = any(error["type"] == "json_invalid" for error in exc.errors())
     if is_invalid_json:
         return error_response(request, 400, "BAD_REQUEST", "请求 JSON 格式无效")
-    return error_response(
-        request, 422, "VALIDATION_ERROR", "请求字段缺失或不符合要求"
-    )
+    return error_response(request, 422, "VALIDATION_ERROR", "请求字段缺失或不符合要求")
 
 
 @app.exception_handler(Exception)

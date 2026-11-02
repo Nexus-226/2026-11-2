@@ -29,9 +29,7 @@ def get_pet(pet_id: UUID, session: DbSession) -> Pet:
 
 
 @router.patch("/{pet_id}", response_model=PetRead)
-def update_pet(
-    pet_id: UUID, pet_in: PetUpdate, session: DbSession
-) -> Pet:
+def update_pet(pet_id: UUID, pet_in: PetUpdate, session: DbSession) -> Pet:
     return pet_service.update_pet(
         session, pet_id, pet_in.model_dump(exclude_unset=True)
     )

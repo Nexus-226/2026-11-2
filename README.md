@@ -92,4 +92,21 @@ python -m pytest backend/tests
 npm run build
 ```
 
-应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。P0 后续需实现 Agent 对话和工具调用；P1 再接入附近地点查询与地图页面。
+Python 使用 Ruff 做检查与格式化，前端使用 Prettier；版本分别固定在 `backend/pyproject.toml` 和 `frontend/package-lock.json`。对本次改动的文件单独运行命令，例如：
+
+```powershell
+# 项目根目录：把路径换成实际改动的 Python 文件
+python -m ruff check backend/app/main.py
+python -m ruff format --check backend/app/main.py
+python -m ruff format backend/app/main.py
+
+# frontend 目录：把路径换成实际改动的前端文件
+npm run format:check -- src/app/App.tsx
+npm run format -- src/app/App.tsx
+```
+
+本 PR 不批量格式化现有文件。`frontend/.prettierignore` 排除了生成文件、锁文件和 Markdown。ESLint 尚未配置，待 C 开发业务页面时确定规则。
+
+`.gitattributes` 让 Git 新检出或重新写入的文本文件使用 LF，即使本机设置了 `core.autocrlf=true`；已有工作区文件不会立即自动转换。请先保存本地改动，再按需用编辑器或对应格式化工具转换涉及的文件。
+
+应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。宠物资料 CRUD 与 SQLite 已实现；P0 后续需实现 Agent 对话和工具调用；P1 再接入附近地点查询和地图页面。

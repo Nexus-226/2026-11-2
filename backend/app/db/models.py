@@ -3,7 +3,6 @@ from datetime import date, datetime, timezone
 from sqlalchemy import Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-
 DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 

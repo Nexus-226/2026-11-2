@@ -4,10 +4,11 @@ Revision ID: 0001_create_users_and_pets
 Revises:
 Create Date: 2026-11-02
 """
+
 from datetime import datetime, timezone
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy import inspect
 
 revision = "0001_create_users_and_pets"
@@ -67,7 +68,9 @@ def upgrade() -> None:
     pet_columns = {column["name"] for column in inspect(bind).get_columns("pets")}
     if "user_id" not in pet_columns:
         with op.batch_alter_table("pets") as batch_op:
-            batch_op.add_column(sa.Column("user_id", sa.String(length=36), nullable=True))
+            batch_op.add_column(
+                sa.Column("user_id", sa.String(length=36), nullable=True)
+            )
             batch_op.create_foreign_key(
                 "fk_pets_user_id_users", "users", ["user_id"], ["id"]
             )
