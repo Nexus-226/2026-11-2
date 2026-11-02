@@ -9,16 +9,16 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from app.agent.schemas import Pet
+from app.schemas.pet import PetRead
 
 
 class PetService(Protocol):
     """宠物资料服务（B 负责实现）。"""
 
-    def get_pet(self, pet_id: UUID) -> Pet | None:
+    def get_pet(self, pet_id: UUID) -> PetRead | None:
         """按 id 返回宠物，不存在返回 None。"""
         ...
 
-    def list_pets(self) -> list[Pet]:
+    def list_pets(self) -> list[PetRead]:
         """返回全部宠物，无结果返回 []。"""
         ...

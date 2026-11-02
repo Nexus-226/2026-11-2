@@ -1,30 +1,11 @@
-"""Agent 工具输入/输出 Schema（A 定义）。
-
-``Pet`` 结构与 docs/API.md「P0：宠物资料」草案一致，仅用于工具层类型约束；
-P0-2 落地后由 B 在 ``app/schemas/`` 提供权威定义，届时工具输出改为引用 B 的
-Schema，避免两处重复。当前属开发期占位，不代表业务字段已冻结。
-"""
+"""Agent 工具调用 Schema；宠物资料使用 B 提供的权威 PetRead。"""
 
 from __future__ import annotations
 
-from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
-
-
-class Pet(BaseModel):
-    """宠物资料（字段与 API.md 草案对齐，供工具输出使用）。"""
-
-    id: UUID
-    name: str
-    species: Literal["dog", "cat", "other"]
-    breed: str | None = None
-    birthday: date | None = None
-    notes: str | None = None
-    created_at: datetime
-    updated_at: datetime
 
 
 class GetPetProfileInput(BaseModel):
