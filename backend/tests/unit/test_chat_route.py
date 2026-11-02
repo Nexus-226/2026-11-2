@@ -37,8 +37,11 @@ def chat_client(
         with test_session() as session:
             yield session
 
+    from app.api.routes.chat import get_llm_provider
+
     monkeypatch.setattr("app.main.init_db", lambda: None)
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_llm_provider] = lambda: MockProvider()
     try:
         with TestClient(app) as test_client:
             yield test_client, engine
@@ -61,7 +64,10 @@ def test_chat_route_runs_agent_and_persists_turn(
     service_instances: list[object] = []
 
     def run_with_script(
-        message: str, requested_pet_id: UUID | None, service: PetService
+        message: str,
+        requested_pet_id: UUID | None,
+        service: PetService,
+        provider: object = None,
     ) -> ChatReply:
         assert message == "豆豆应该怎么护理？"
         assert requested_pet_id == UUID(pet_id)
@@ -174,3 +180,32 @@ def test_chat_request_strips_message_and_rejects_blank_content() -> None:
     assert len(ChatRequest(message="a" * 4000).message) == 4000
     with pytest.raises(ValueError):
         ChatRequest(message="a" * 4001)
+
+
+@pytest.mark.parametrize(
+    ("code", "status_code"),
+    [
+        ("UPSTREAM_ERROR", 502),
+        ("SERVICE_UNAVAILABLE", 503),
+        ("UPSTREAM_TIMEOUT", 504),
+    ],
+)
+def test_chat_route_maps_provider_error_to_upstream_status(
+    chat_client: tuple[TestClient, Engine], code: str, status_code: int
+) -> None:
+    from app.agent.errors import ProviderError
+    from app.api.routes.chat import get_llm_provider
+
+    class FailingProvider:
+        def next_turn(self, **kwargs: object) -> object:
+            raise ProviderError(code, "模型服务不可用")
+
+    client, _ = chat_client
+    app.dependency_overrides[get_llm_provider] = lambda: FailingProvider()
+    try:
+        response = client.post("/api/v1/chat", json={"message": "你好"})
+    finally:
+        app.dependency_overrides.pop(get_llm_provider, None)
+
+    assert response.status_code == status_code
+    assert response.json()["error"]["code"] == code

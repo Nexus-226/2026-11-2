@@ -12,7 +12,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.agent.errors import ProviderError
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.providers.base import LLMProvider
 from app.agent.providers.factory import build_default_provider
@@ -58,15 +57,12 @@ def run_chat(
     tool_call_count = 0
 
     while True:
-        try:
-            turn = provider.next_turn(
-                system_prompt=system,
-                user_message=message,
-                tools=tools,
-                tool_results=results,
-            )
-        except ProviderError as exc:
-            return ChatReply(reply=f"抱歉，{exc.message}。", tool_calls=summaries)
+        turn = provider.next_turn(
+            system_prompt=system,
+            user_message=message,
+            tools=tools,
+            tool_results=results,
+        )
         if turn.reply is not None:
             return ChatReply(reply=turn.reply, tool_calls=summaries)
         if turn.tool_call is None:

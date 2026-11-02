@@ -99,3 +99,22 @@ def test_qwen_provider_maps_http_error_to_provider_error() -> None:
             tool_results=[],
         )
     assert exc_info.value.code == "UPSTREAM_ERROR"
+
+
+def test_qwen_provider_maps_bad_json_to_provider_error() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=b"not-json")
+    )
+    provider = QwenProvider(
+        api_key="test-key",
+        base_url="https://example.com/compatible-mode/v1",
+        transport=transport,
+    )
+    with pytest.raises(ProviderError) as exc_info:
+        provider.next_turn(
+            system_prompt="sys",
+            user_message="hi",
+            tools=[],
+            tool_results=[],
+        )
+    assert exc_info.value.code == "UPSTREAM_ERROR"

@@ -130,10 +130,14 @@ class QwenProvider:
                 },
             )
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]
         except httpx.TimeoutException as exc:
             raise ProviderError("UPSTREAM_TIMEOUT", "模型响应超时") from exc
         except httpx.HTTPStatusError as exc:
             raise ProviderError("UPSTREAM_ERROR", "模型服务不可用") from exc
         except httpx.RequestError as exc:
             raise ProviderError("SERVICE_UNAVAILABLE", "无法连接模型服务") from exc
+
+        try:
+            return response.json()["choices"][0]["message"]
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise ProviderError("UPSTREAM_ERROR", "模型返回格式异常") from exc
