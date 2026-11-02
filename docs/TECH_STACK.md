@@ -8,10 +8,11 @@
 |---|---|---|---|
 | 前端 | React 19、TypeScript 5.7、Vite 6；npm，依赖锁定见 `frontend/package-lock.json` | C | 宠物资料和聊天页面支持演示；真实接口联调待做 |
 | 后端入口 | Python 3.10+、FastAPI、Pydantic、Uvicorn | B | 健康检查、宠物 CRUD、对话路由和统一错误响应已实现 |
-| Agent | Python 模块放在 `backend/app/agent/`；白名单工具、Pydantic 参数校验；LLM 通过 Provider 抽象 | A | Runtime、宠物工具、对话编排和 MockProvider 已实现；真实 LLM 待接入 |
+| Agent | Python 模块放在 `backend/app/agent/`；白名单工具、Pydantic 参数校验；LLM 通过 Provider 抽象 | A | Runtime、宠物工具、对话编排及 Qwen/Mock Provider 已实现；跨请求历史上下文待修复（P0-8） |
 | 业务服务 | Service 组织业务，外部系统使用独立 Adapter | B；LLM Provider 由 A 与 B 对齐 | 宠物与对话 Service 已实现；地图适配待做 |
 | 数据库 | SQLite + SQLAlchemy 2 + Alembic 迁移 | B | 宠物、会话和消息已持久化；启动时由 Alembic 应用迁移 |
-| 地图（P1） | 高德开放平台；后端 Web 服务查询 POI，前端地图展示 | B 后端，C 前端，A 工具调用 | 未接入；Key、配额与服务权限待团队准备 |
+| 日常记录与站内提醒（P1） | 复用现有分层和数据库；具体字段/接口由 P1-7 确认 | B 数据服务，C 页面，A 只读工具 | 全部未开始；不等同于已有宠物备注或聊天记录 |
+| 地图（P1） | 高德开放平台；后端 Web 服务查询 POI，前端地图展示 | B 后端，C 前端，A 工具调用 | 未接入，POI 尚未查通；Key、配额与服务权限在地图开发前确认 |
 | 测试 | 后端 pytest + HTTPX；前端 Vitest + Testing Library + jsdom，另有构建检查 | 各负责人 | 后端宠物、Agent 和对话接口有测试；前端有聊天交互与 API Client 测试 |
 | 协作 | Git 短分支 + PR，按 `docs/PR_GUIDE.md` 评审 | 全员 | 指南已入库 |
 
@@ -26,12 +27,12 @@
 - Agent 不直接执行模型生成的代码、SQL、Shell 或任意 URL；工具经过参数校验并调用服务。LLM Provider 抽象归 A，连接和错误边界与 B 对齐。
 - 三方响应先在适配层转换为项目内部结构；前端和 Agent 不依赖高德原始字段。
 - P0 先采用单用户本地演示，不实现登录和用户隔离；上线前必须重新设计认证、权限和数据隔离。
-- `.env.example` 当前只是变量名示例，程序还不读取它；不能把它视为密钥管理已完成。
+- `.env.example` 只是示例，不会被直接加载；LLM 配置已读取环境变量，并在 python-dotenv 可用时加载本地 `.env`。有 LLM_API_KEY 使用 Qwen，否则使用 MockProvider；真实密钥不能提交。
 
 ## 版本与待确认事项
 
-- 模型供应商、模型名称、Key 和部署方式由 A/B 根据实际可用资源决定；接口不依赖某一家。
+- 已接入 DashScope OpenAI 兼容接口，默认 qwen-plus，使用现有 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL 配置；接口保留 Provider 抽象，部署方式仍需按实际资源确认。
 - 包版本以各自依赖文件及前端锁文件为准；Python 依赖当前是范围约束，尚无锁文件。
-- 地图 Key、浏览器地图 SDK 与后端 Web 服务的申请和配额需在 P1 开发前确认。
-- 三天演示可先使用明确标注的种子地点；完整 P1 的真实附近服务仍需高德接入与验收。详见 [任务表](TASKS.md)。
+- P1 全部未开始，实施顺序为日常记录、站内提醒、Agent 查询、附近服务；P2 增强项见任务表。地图 Key、浏览器 SDK 与后端 Web 服务的申请和配额在地图开发前确认，不阻塞记录主线。
+- 地图阶段可先使用明确标注的种子地点；完整附近服务仍需高德接入与验收，不能将地图演示数据描述为实时查询。详见 [任务表](TASKS.md)。
 - API 契约见 [API.md](API.md)，当前仓库与指南的差距见 [REPOSITORY_STATUS.md](REPOSITORY_STATUS.md)。
