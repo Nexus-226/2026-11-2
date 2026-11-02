@@ -104,8 +104,9 @@ class QwenProvider:
                 args = json.loads(function.get("arguments") or "{}")
             except (KeyError, IndexError, TypeError, ValueError) as exc:
                 raise ProviderError("UPSTREAM_ERROR", "模型工具调用格式异常") from exc
+            # 只保留第一个工具调用，与后续单个工具结果一一对应，避免并行调用回填不完整
             self._messages.append(
-                {"role": "assistant", "content": None, "tool_calls": tool_calls}
+                {"role": "assistant", "content": None, "tool_calls": [call]}
             )
             self._pending_tool_call_id = call_id
             return ProviderTurn(tool_call=ToolCallRequest(name=name, args=args))
@@ -127,6 +128,7 @@ class QwenProvider:
                     "messages": self._messages,
                     "tools": tools_payload,
                     "tool_choice": "auto",
+                    "parallel_tool_calls": False,
                 },
             )
             response.raise_for_status()

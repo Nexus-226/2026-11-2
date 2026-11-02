@@ -150,3 +150,60 @@ def test_qwen_provider_maps_malformed_tool_call_to_provider_error() -> None:
             tool_results=[],
         )
     assert exc_info.value.code == "UPSTREAM_ERROR"
+
+
+def test_qwen_provider_handles_parallel_tool_calls() -> None:
+    requests: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "get_pet_profile",
+                                        "arguments": json.dumps({"pet_id": PET_ID}),
+                                    },
+                                },
+                                {
+                                    "id": "call_2",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "list_pets",
+                                        "arguments": "{}",
+                                    },
+                                },
+                            ],
+                        }
+                    }
+                ]
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    provider = QwenProvider(
+        api_key="test-key",
+        base_url="https://example.com/compatible-mode/v1",
+        transport=transport,
+    )
+    turn = provider.next_turn(
+        system_prompt="sys",
+        user_message="hi",
+        tools=[_get_pet_profile_tool()],
+        tool_results=[],
+    )
+
+    assert turn.tool_call is not None
+    assert turn.tool_call.name == "get_pet_profile"
+    assert requests[0]["parallel_tool_calls"] is False
+    assert len(provider._messages[-1]["tool_calls"]) == 1
+    assert provider._messages[-1]["tool_calls"][0]["id"] == "call_1"
