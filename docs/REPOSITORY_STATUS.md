@@ -4,7 +4,7 @@
 
 | 项目 | 当前状态 | 下一步 |
 |---|---|---|
-| React + TypeScript + Vite | 已有入口、依赖与锁文件；构建通过 | C 实现页面、API Client、前端测试 |
+| React + TypeScript + Vite | 已有宠物资料页面和 API Client，默认本地演示 | C 与 B 联调真实接口，继续实现聊天页面和前端测试 |
 | FastAPI | `GET /health` 与宠物资料 CRUD 已实现；错误格式和参数校验有测试 | B 实现对话接口及后续业务路由 |
 | Agent 与工具 | `backend/app/agent/tools/` 目录已预留 | A 实现 Runtime、提示词、注册表、Schema、超时和调用次数限制 |
 | 业务和数据 | SQLite/SQLAlchemy 本地演示用户、宠物持久化与 CRUD 已实现；Alembic 迁移已配置 | B 完成会话存储和地图服务 |

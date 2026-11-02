@@ -59,14 +59,19 @@ def error_response(
 async def handle_http_error(
     request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
+    code = "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
+    message = "未找到请求的资源" if exc.status_code == 404 else "请求失败"
+    retryable = False
     if isinstance(exc.detail, dict):
-        code = exc.detail["code"]
-        message = exc.detail["message"]
-        retryable = exc.detail.get("retryable", False)
-    else:
-        code = "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
-        message = "未找到请求的资源" if exc.status_code == 404 else "请求失败"
-        retryable = False
+        detail_code = exc.detail.get("code")
+        detail_message = exc.detail.get("message")
+        detail_retryable = exc.detail.get("retryable", False)
+        if isinstance(detail_code, str) and detail_code:
+            code = detail_code
+        if isinstance(detail_message, str) and detail_message:
+            message = detail_message
+        if isinstance(detail_retryable, bool):
+            retryable = detail_retryable
     return error_response(request, exc.status_code, code, message, retryable)
 
 
