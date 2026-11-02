@@ -23,6 +23,8 @@ scripts/                      开发辅助脚本
 
 A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1，目录预留不代表功能已完成。
 
+原始《Pet Agent 架构与开发指南》第 9 节将 A、C 的职责写反；本仓库以当前明确的 **A：Agent、B：后端、C：前端** 分工为准。
+
 开发前请先评审：[技术栈与分层约定](docs/TECH_STACK.md)、[接口契约草案](docs/API.md) 和 [仓库现状与缺项](docs/REPOSITORY_STATUS.md)。Git 协作见 [PR 指南](docs/PR_GUIDE.md)。
 
 项目优先级：P0 先完成宠物资料与 Agent 对话闭环；P1 再加入附近宠物服务。负责人、依赖、状态和审核安排见 [项目任务表](docs/TASKS.md)。
@@ -51,7 +53,9 @@ LLM 供应商和具体模型尚未确定。前端锁定的依赖版本见 `front
 | `POST /api/v1/chat` | Agent 对话，第一版暂定 JSON 回复 | P0 |
 | `GET /api/v1/nearby`、`GET /api/v1/places/{place_id}` | 附近服务查询和地点详情 | P1 |
 
-宠物字段、错误格式、A/B 工具边界和地图参数以 [接口契约草案](docs/API.md) 为准。契约需三人评审；实现时如有变更，同步更新文档和测试。
+宠物字段、错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。除下述已决定的宠物字段外，其余约定仍需三人评审；实现时如有变更，同步更新文档和测试。
+
+宠物资料的字段已决定：P0 使用可为空的 `birthday` 和 `notes`，不新增 `age`、`health_notes`。生日不详时可在 `notes` 写大概年龄，不推测生日；其他接口约定仍需评审。
 
 ## 启动
 

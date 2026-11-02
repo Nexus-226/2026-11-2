@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的**契约草案**。除 `GET /health` 外均尚未实现，评审后由 B 落地 Pydantic/OpenAPI，A、C 对照实现并联调。接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定，其他约定仍待三人评审。除 `GET /health` 外均尚未实现，由 B 落地 Pydantic/OpenAPI，A、C 对照实现并联调。接口变更先在 PR 中同步三人。
 
 ## 共同规则
 
@@ -45,6 +45,19 @@
 ```
 
 `name` 为去除首尾空格后 1–50 字符；`species` 为 `dog`、`cat`、`other`。其余可选字段在响应中总是出现：`breed`、`notes` 为字符串或 `null`（最长分别 100、2000 字符），`birthday` 为 `YYYY-MM-DD` 日期或 `null`，不得晚于当天。创建时省略可选字段等同 `null`。
+
+### P0 最终决定：生日和备注字段
+
+- 统一使用 `birthday` 和 `notes`；P0 的宠物资料请求和响应不新增 `age`、`health_notes` 字段。早期任务说明中的“年龄、健康备注”是需求描述，不是另外两项 API 字段。
+- `birthday` 保存已知的生日；为空时表示未知。有生日时可按需要计算年龄，不把计算结果当成额外存储字段。
+- `notes` 用于健康和其他注意事项，允许为空。只知道大概年龄时，`birthday` 填 `null`，可在 `notes` 中写“约 3 岁”；不要由大概年龄推测具体生日。备注是自由文本，不保证能自动计算年龄。
+- B 的数据模型和 API、C 的表单和客户端、A 获取的宠物资料均使用同一约定。未来要增加字段时，先在 PR 中同步 A、B、C 并更新文档和调用方。
+
+例如，不知道生日但知道大概年龄时，创建请求可写：
+
+```json
+{"name":"豆豆","species":"dog","birthday":null,"notes":"约 3 岁"}
+```
 
 | 方法和路径 | 输入 | 成功响应 |
 |---|---|---|
@@ -98,7 +111,7 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 `GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000`。
 
 - `lat`、`lng` 为 WGS84 十进制度数；纬度 -90～90，经度 -180～180。后端适配高德时负责坐标系转换；返回坐标也统一 WGS84，前端地图 SDK 使用时由地图展示适配层按需转换。
-- `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。
+- `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。旧架构指南流程图中的 `radius` 在实现时统一使用此处的 `radius_m`。
 - `200` 返回按 `distance_m` 升序的 `Place[]`；无结果为 `[]`。拒绝定位时由前端允许手动输入地址，地址解析接口需在 P1 实现前另行约定，不能假定已实现。
 
 ```json
@@ -116,6 +129,10 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 }]
 ```
 
-`phone`、`navigation_url` 可为 `null`；`business_status` 为 `open`、`closed`、`unknown`，不可确定时用 `unknown`。有导航链接时必须由用户主动打开。空电话显示“暂无电话”。`id` 使用 `amap:` 加供应商地点 ID；`distance_m` 为非负整数，单位米。
+`phone`、`navigation_url` 可为 `null`；`business_status` 为 `open`、`closed`、`unknown`，不可确定时用 `unknown`。有导航链接时必须由用户主动打开。空电话显示“暂无电话”。`distance_m` 为非负整数，单位米。
+
+数据来源和 ID 约定：真实高德数据使用 `data_source: "amap"`、`id: "amap:<高德地点 ID>"`；种子演示数据使用 `data_source: "demo"`、`id: "demo:<稳定的演示地点 ID>"`。前端和 Agent 必须明确标注演示数据，不能称为实时结果。高德不可用时如果回落演示数据，也必须标注来源；不能提供真实导航时 `navigation_url` 为 `null`。
+
+高德失败后回落时，前端还需要知道服务不可用并提供重试；仅依赖列表中的每条 `data_source` 无法表达空列表时的回落状态。P1 实现前由 A、B、C 确认如何传递回落原因和状态（包括空结果）；该部分目前尚未实现或冻结。
 
 `GET /api/v1/places/{place_id}` 返回 `200` 和单个 `Place`；其中 `distance_m` 依赖用户位置，因此详情请求必须附带 `lat`、`lng`，规则同上。地点无效返回 `404 PLACE_NOT_FOUND`。地图与列表使用同一结果集，地图失败需保留列表或给出可理解错误。
