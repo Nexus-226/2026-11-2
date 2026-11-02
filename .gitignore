@@ -1,0 +1,12 @@
+# 本地草稿和临时文件
+work/
+
+# 本地密钥与常见生成文件
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+__pycache__/
+.pytest_cache/
