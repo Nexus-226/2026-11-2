@@ -11,7 +11,8 @@
 ## 架构与接口
 
 - 前端通过 FastAPI 通信；Agent 只调用已注册且经过参数校验的工具；工具通过 Service 使用数据库或外部服务。避免跨层直连。
-- 接口以 [docs/API.md](docs/API.md) 为当前待团队评审的契约草案，技术选型和实现状态见 [docs/TECH_STACK.md](docs/TECH_STACK.md) 与 [docs/REPOSITORY_STATUS.md](docs/REPOSITORY_STATUS.md)。实现或调整接口时，同步相关 Schema、前端类型、文档与适当的测试。
+- 接口以 [docs/API.md](docs/API.md) 为准；其中宠物资料的生日和备注字段已决定，其余部分仍待团队评审。技术选型和实现状态见 [docs/TECH_STACK.md](docs/TECH_STACK.md) 与 [docs/REPOSITORY_STATUS.md](docs/REPOSITORY_STATUS.md)。实现或调整接口时，同步相关 Schema、前端类型、文档与适当的测试。
+- P0 宠物资料的生日和备注字段已确定为 `birthday`、`notes`，不新增 `age`、`health_notes`；生日不详时可在备注记录大概年龄，不能推测具体生日。其他接口约定仍需团队评审。
 - P0 对话草案为 `POST /api/v1/chat`，普通 JSON 请求和回复；地图相关路径为 P1。不要自行把 SSE 或地图接入设为 P0 前提。
 - Agent 不执行模型输出的代码、SQL、Shell 或任意 URL；不要把第三方原始响应直接作为项目内部模型。
 - 不提交真实密钥、`.env`、数据库文件、精确定位或真实对话数据；`.env.example` 只能包含安全示例。

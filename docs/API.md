@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口约定。宠物资料 CRUD 已由后端实现；对话和地图接口仍是待实现契约。接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；本 PR 实现宠物 CRUD，对话和地图接口仍待实现。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
 
 ## 共同规则
 
@@ -129,7 +129,7 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 `GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000`。
 
 - `lat`、`lng` 为 WGS84 十进制度数；纬度 -90～90，经度 -180～180。后端适配高德时负责坐标系转换；返回坐标也统一 WGS84，前端地图 SDK 使用时由地图展示适配层按需转换。
-- `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。
+- `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。旧架构指南流程图中的 `radius` 在实现时统一使用此处的 `radius_m`。
 - `200` 返回按 `distance_m` 升序的 `Place[]`；无结果为 `[]`。拒绝定位时由前端允许手动输入地址，地址解析接口需在 P1 实现前另行约定，不能假定已实现。
 
 ```json
@@ -147,6 +147,10 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 }]
 ```
 
-`phone`、`navigation_url` 可为 `null`；`business_status` 为 `open`、`closed`、`unknown`，不可确定时用 `unknown`。有导航链接时必须由用户主动打开。空电话显示“暂无电话”。`id` 使用 `amap:` 加供应商地点 ID；`distance_m` 为非负整数，单位米。
+`phone`、`navigation_url` 可为 `null`；`business_status` 为 `open`、`closed`、`unknown`，不可确定时用 `unknown`。有导航链接时必须由用户主动打开。空电话显示“暂无电话”。`distance_m` 为非负整数，单位米。
+
+数据来源和 ID 约定：真实高德数据使用 `data_source: "amap"`、`id: "amap:<高德地点 ID>"`；种子演示数据使用 `data_source: "demo"`、`id: "demo:<稳定的演示地点 ID>"`。前端和 Agent 必须明确标注演示数据，不能称为实时结果。高德不可用时如果回落演示数据，也必须标注来源；不能提供真实导航时 `navigation_url` 为 `null`。
+
+高德失败后回落时，前端还需要知道服务不可用并提供重试；仅依赖列表中的每条 `data_source` 无法表达空列表时的回落状态。P1 实现前由 A、B、C 确认如何传递回落原因和状态（包括空结果）；该部分目前尚未实现或冻结。
 
 `GET /api/v1/places/{place_id}` 返回 `200` 和单个 `Place`；其中 `distance_m` 依赖用户位置，因此详情请求必须附带 `lat`、`lng`，规则同上。地点无效返回 `404 PLACE_NOT_FOUND`。地图与列表使用同一结果集，地图失败需保留列表或给出可理解错误。
