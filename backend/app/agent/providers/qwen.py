@@ -102,6 +102,8 @@ class QwenProvider:
                 name = function["name"]
                 call_id = call["id"]
                 args = json.loads(function.get("arguments") or "{}")
+                if not isinstance(args, dict):
+                    raise TypeError("arguments must be a JSON object")
             except (KeyError, IndexError, TypeError, ValueError) as exc:
                 raise ProviderError("UPSTREAM_ERROR", "模型工具调用格式异常") from exc
             # 只保留第一个工具调用，与后续单个工具结果一一对应，避免并行调用回填不完整
@@ -140,6 +142,9 @@ class QwenProvider:
             raise ProviderError("SERVICE_UNAVAILABLE", "无法连接模型服务") from exc
 
         try:
-            return response.json()["choices"][0]["message"]
+            message = response.json()["choices"][0]["message"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise ProviderError("UPSTREAM_ERROR", "模型返回格式异常") from exc
+        if not isinstance(message, dict):
+            raise ProviderError("UPSTREAM_ERROR", "模型返回格式异常")
+        return message
