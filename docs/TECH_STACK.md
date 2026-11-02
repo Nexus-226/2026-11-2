@@ -4,7 +4,7 @@
 
 | 部分 | 技术约定 | 负责人 | 当前状态 |
 |---|---|---|---|
-| 前端 | React 19、TypeScript 5.7、Vite 6；npm，依赖锁定见 `frontend/package-lock.json` | C | 占位页面可构建；业务页面、API Client 和测试待做 |
+| 前端 | React 19、TypeScript 5.7、Vite 6；npm，依赖锁定见 `frontend/package-lock.json` | C | 宠物资料页面和 API Client 已有；默认本地演示，真实接口联调与其他页面待做 |
 | 后端入口 | Python 3.10+、FastAPI、Pydantic、Uvicorn | B | FastAPI、Uvicorn 已配置；仅 `GET /health` 已实现 |
 | Agent | Python 模块放在 `backend/app/agent/`；白名单工具、Pydantic 参数校验；LLM 通过 Provider 抽象 | A | 仅目录占位；Runtime、工具和模型接入待做 |
 | 业务服务 | Service 组织业务，外部系统使用独立 Adapter | B；LLM Provider 由 A 与 B 对齐 | 仅目录占位 |

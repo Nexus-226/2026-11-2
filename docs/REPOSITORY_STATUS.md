@@ -4,7 +4,7 @@
 
 | 项目 | 当前状态 | 下一步 |
 |---|---|---|
-| React + TypeScript + Vite | 已有入口、依赖与锁文件；构建通过 | C 实现页面、API Client、前端测试 |
+| React + TypeScript + Vite | 已有宠物资料页面和 API Client，默认本地演示 | C 与 B 联调真实接口，继续实现聊天页面和前端测试 |
 | FastAPI | 已有应用入口和 `GET /health`，健康检查测试通过 | B 实现路由、统一错误、参数校验 |
 | Agent 与工具 | `backend/app/agent/tools/` 目录已预留 | A 实现 Runtime、提示词、注册表、Schema、超时和调用次数限制 |
 | 业务和数据 | services、db、integrations、migrations 目录已预留 | B 安装并配置 SQLAlchemy/Alembic，完成数据库、迁移、宠物 CRUD |
