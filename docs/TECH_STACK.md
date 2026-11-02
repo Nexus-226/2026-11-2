@@ -10,7 +10,7 @@
 | 后端入口 | Python 3.10+、FastAPI、Pydantic、Uvicorn | B | FastAPI、Uvicorn 已配置；仅 `GET /health` 已实现 |
 | Agent | Python 模块放在 `backend/app/agent/`；白名单工具、Pydantic 参数校验；LLM 通过 Provider 抽象 | A | 仅目录占位；Runtime、工具和模型接入待做 |
 | 业务服务 | Service 组织业务，外部系统使用独立 Adapter | B；LLM Provider 由 A 与 B 对齐 | 仅目录占位 |
-| 数据库 | SQLite + SQLAlchemy 2 + Alembic 迁移 | B | 仅预留目录；依赖、模型、连接和迁移尚未配置 |
+| 数据库 | SQLite + SQLAlchemy 2 + Alembic 迁移 | B | SQLite/SQLAlchemy 本地演示用户、宠物模型与 CRUD 已实现；启动时由 Alembic 应用迁移 |
 | 地图（P1） | 高德开放平台；后端 Web 服务查询 POI，前端地图展示 | B 后端，C 前端，A 工具调用 | 未接入；Key、配额与服务权限待团队准备 |
 | 测试 | 后端 pytest + HTTPX；前端构建检查，测试框架待 C 选定 | 各负责人 | 后端健康检查 1 项；前端有构建命令，尚无测试框架 |
 | 协作 | Git 短分支 + PR，按 `docs/PR_GUIDE.md` 评审 | 全员 | 指南已入库 |
@@ -31,7 +31,7 @@
 ## 版本与待确认事项
 
 - 模型供应商、模型名称、Key 和部署方式由 A/B 根据实际可用资源决定；接口不依赖某一家。
-- 包版本以各自依赖文件及前端锁文件为准；SQLAlchemy、Alembic 和前端测试框架将在实际接入时加入并锁定。Python 依赖当前是范围约束，尚无锁文件。
+- 包版本以各自依赖文件及前端锁文件为准；Python 依赖当前是范围约束，尚无锁文件。
 - 地图 Key、浏览器地图 SDK 与后端 Web 服务的申请和配额需在 P1 开发前确认。
 - 三天演示可先使用明确标注的种子地点；完整 P1 的真实附近服务仍需高德接入与验收。详见 [任务表](TASKS.md)。
 - API 契约见 [API.md](API.md)，当前仓库与指南的差距见 [REPOSITORY_STATUS.md](REPOSITORY_STATUS.md)。
