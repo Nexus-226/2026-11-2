@@ -112,6 +112,8 @@ PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes` 传 `nu
 
 `status` 为 `success` 或 `error`。若无法生成可信回答，返回相应错误状态码，不伪造回复。医疗信息需提醒仅供参考，紧急情况联系兽医。会话及消息持久化由 B 负责；Agent 的工具选择和输出组织由 A 负责；前端显示加载、错误和取消状态由 C 负责。
 
+当前后端路由已接入 A 的 `run_chat`，使用 `BoundPetService` 绑定请求级数据库会话；传入不存在的 `pet_id` 时在调用 Agent 前返回 `404 PET_NOT_FOUND`。会话、用户消息和助手回复持久化到 SQLite。Agent 当前默认使用 `MockProvider`，真实 LLM 尚未接入。
+
 ## A ↔ B：Agent 内部工具约定
 
 Agent 在后端进程内调用注册表中的工具；工具不从前端直接暴露，也不由模型执行任意代码。A 定义输入/输出 Pydantic Schema 和注册协议，B 提供 Service 方法。以下为工具**逻辑契约**，具体函数签名由 A/B 联调确定：

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app.api.routes import pets
+from app.api.routes import chat, pets
 from app.db.session import init_db
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Pet Agent API", version="0.1.0", lifespan=lifespan)
 app.include_router(pets.router, prefix="/api/v1/pets", tags=["pets"])
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 
 
 @app.middleware("http")

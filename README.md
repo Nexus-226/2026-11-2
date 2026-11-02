@@ -1,6 +1,6 @@
 # Pet Agent
 
-三人协作的宠物助手项目。前端提供宠物资料演示页面，后端提供健康检查和基于 SQLite 的宠物资料 CRUD；前后端真实联调、Agent 对话与附近服务仍待完成。
+三人协作的宠物助手项目。前端提供宠物资料演示页面，后端提供健康检查、宠物资料 CRUD 和基于 MockProvider 的 Agent 对话接口；真实 LLM 接入、前后端完整联调与附近服务仍待完成。
 
 ## 目录与分工
 
@@ -34,8 +34,8 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | 部分 | 约定 | 当前状态 |
 |---|---|---|
 | 前端 | React + TypeScript + Vite | 宠物资料页面支持本地演示；真实接口联调和其他页面待开发 |
-| 后端 | Python + FastAPI + Pydantic | 健康检查、宠物资料 CRUD、统一错误响应已实现 |
-| Agent | Python Agent 模块、受控工具和 LLM Provider | 目录已预留；模型和工具接入待开发 |
+| 后端 | Python + FastAPI + Pydantic | 健康检查、宠物资料 CRUD、统一错误响应、对话路由和会话消息持久化已实现 |
+| Agent | Python Agent 模块、受控工具和 LLM Provider | Agent Runtime、宠物工具、对话编排和 MockProvider 已接入；真实模型待接入 |
 | 数据 | SQLite + SQLAlchemy 2 + Alembic | 本地演示用户与宠物资料通过 SQLite/SQLAlchemy 持久化；Alembic 迁移已配置 |
 | 地图（P1） | 高德开放平台 | 尚未接入；Key 和配额待准备 |
 
@@ -50,7 +50,7 @@ LLM 供应商和具体模型尚未确定。前端锁定的依赖版本见 `front
 | `GET /health` | 服务健康检查 | 已实现 |
 | `GET /api/v1/pets`、`POST /api/v1/pets` | 查询列表、新建宠物 | P0，已实现 |
 | `GET /api/v1/pets/{pet_id}`、`PATCH /api/v1/pets/{pet_id}`、`DELETE /api/v1/pets/{pet_id}` | 查看、修改、删除宠物 | P0，已实现 |
-| `POST /api/v1/chat` | Agent 对话，第一版暂定 JSON 回复 | P0 |
+| `POST /api/v1/chat` | Agent 对话，JSON 回复；当前使用 MockProvider | P0，路由与会话存储已实现 |
 | `GET /api/v1/nearby`、`GET /api/v1/places/{place_id}` | 附近服务查询和地点详情 | P1 |
 
 宠物字段、错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。除已决定的宠物字段外，其余接口约定仍需三人评审；实现时如有变更，同步更新文档和测试。
@@ -111,4 +111,4 @@ npm run format -- src/app/App.tsx
 
 `.gitattributes` 让 Git 新检出或重新写入的文本文件使用 LF，即使本机设置了 `core.autocrlf=true`；已有工作区文件不会立即自动转换。请先保存本地改动，再按需用编辑器或对应格式化工具转换涉及的文件。
 
-应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。宠物资料 CRUD 与 SQLite 已实现；P0 后续需实现 Agent 对话和工具调用；P1 再接入附近地点查询和地图页面。
+应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。宠物资料 CRUD、Agent 对话路由和会话消息持久化已实现；P0 后续需接入真实 LLM 并完成前后端联调；P1 再接入附近地点查询和地图页面。
