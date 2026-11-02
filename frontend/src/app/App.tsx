@@ -1,5 +1,19 @@
+import { useState } from "react";
+import type { AppPage } from "../components/common/AppHeader";
+import ChatPage from "../pages/ChatPage";
 import PetProfilePage from "../pages/PetProfilePage";
 
 export default function App() {
-  return <PetProfilePage />;
+  const [page, setPage] = useState<AppPage>("chat");
+
+  return (
+    <>
+      <div hidden={page !== "chat"}>
+        <ChatPage active={page === "chat"} onNavigate={setPage} />
+      </div>
+      <div hidden={page !== "pets"}>
+        <PetProfilePage onNavigate={setPage} />
+      </div>
+    </>
+  );
 }
