@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 from uuid import UUID
 
@@ -48,7 +49,7 @@ def run_chat(
     provider = provider or build_default_provider()
     tools = [registry.get(name) for name in registry.names()]
 
-    system = SYSTEM_PROMPT
+    system = SYSTEM_PROMPT + f" 今天是 {date.today().isoformat()}。"
     if pet_id is not None:
         system += f" 当前关联宠物 pet_id={pet_id}。"
 
