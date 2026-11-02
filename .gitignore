@@ -1,5 +1,6 @@
 # 本地草稿和临时文件
 work/
+outputs/
 
 # 本地密钥与常见生成文件
 .env
@@ -11,9 +12,14 @@ build/
 __pycache__/
 .pytest_cache/
 .venv/
+*.db
+*.sqlite
+*.sqlite3
 *.egg-info/
+*.tsbuildinfo
 .coverage
 coverage.xml
-*.sqlite3
-*.tsbuildinfo
+frontend/coverage/
+.mypy_cache/
+.ruff_cache/
 .DS_Store

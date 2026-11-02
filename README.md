@@ -10,13 +10,16 @@ Pet Agent 是一个三天黑客松项目：先完成“宠物资料 CRUD → 个
 
 > Agent 是 FastAPI 后端内的 Python 模块，只能调用进程内登记的白名单工具/服务。前端只调用 FastAPI；Agent 不调用前端，也不通过 HTTP 绕回 B 的接口。
 
-## 目录
+## 目录与分工
 
 ```text
 frontend/   React + TypeScript + Vite（C：前端与演示）
 backend/    FastAPI、数据/地图服务（B）和进程内 Agent（A）
-docs/       架构、接口和三天任务清单
+docs/       架构、API、技术栈、PR 指南和三天任务
+scripts/    后续开发辅助脚本
 ```
+
+A 负责 Agent 与工具协议；B 负责后端、数据和地图；C 负责前端与演示。已有协作文档继续保留：[技术栈](docs/TECH_STACK.md)、[PR 指南](docs/PR_GUIDE.md)、[仓库状态](docs/REPOSITORY_STATUS.md)。
 
 ## 快速启动
 
