@@ -1,6 +1,6 @@
 # Pet Agent：PR 拆分与评审规范（3 天版）
 
-> 配套文档：《Pet Agent：三人任务拆分（3 天版）》
+> 配套文档：[接口契约草案](API.md)、[技术栈与分层约定](TECH_STACK.md)
 > 目标：接口先合、功能后合；每个 PR 能独立启动、只做一件事、至少一人评审。
 > 适用：A（Agent）、B（后端/数据）、C（前端/演示）
 
@@ -22,12 +22,12 @@
 
 | 顺序 | PR 标题 | 内容 | 提交人 | 评审人 | 依赖 |
 |---|---|---|---|---|---|
-| 1 | chore: 项目骨架与启动说明 | 目录结构、README、.env.example、.gitignore、requirements.txt、/health | B | A 或 C | 无 |
-| 2 | feat: 宠物资料 CRUD 与统一返回外壳 | pets 表、GET/PUT /api/pets/{petId}、统一返回外壳、接口示例 | B | A + C | PR1 |
-| 3 | feat: 前端单页骨架与宠物表单 | index.html + app.js + style.css，表单调 PR2 接口 | C | B | PR2 字段冻结 |
-| 4 | feat: Agent 对话接口与资料工具 | POST /api/agent/chat、工具调用循环、get_pet_profile 工具 | A | B | PR2 接口 |
+| 1 | chore: 项目骨架与启动说明 | React/Vite、FastAPI、README、.env.example、.gitignore、pyproject.toml、/health（已合并） | B | A 或 C | 无 |
+| 2 | feat: 宠物资料 CRUD 与错误格式 | pets 表、`/api/v1/pets` CRUD、统一错误、接口示例 | B | A + C | PR1 |
+| 3 | feat: 前端宠物表单 | React 页面、API Client，表单调用 PR2 接口 | C | B | PR2 字段冻结 |
+| 4 | feat: Agent 对话接口与资料工具 | `POST /api/v1/chat`、工具调用循环、get_pet_profile 工具 | A + B | C | PR2 接口 |
 | 5 | feat: 聊天页面接入 Agent | 聊天 UI、加载/错误状态、调 PR4 | C | A | PR4 |
-| 6 | feat: P1 附近门店（种子数据） | places 种子表、GET /api/nearby、距离排序、前端列表/地图 | B 主 + C 辅 | A | PR2 |
+| 6 | feat: P1 附近门店（种子数据） | 演示数据、`GET /api/v1/nearby`、距离排序、前端列表/地图；明确标注数据来源 | B 主 + C 辅 | A | PR2 |
 | 7（可选） | feat: 高德 Adapter | 真实 POI 接入，失败回落种子数据并标注来源 | B | A | PR6 |
 
 PR7 为加分项，不阻塞演示。未完成时主分支仍可完整演示 P0 + 种子数据版 P1。
@@ -64,7 +64,7 @@ PR7 为加分项，不阻塞演示。未完成时主分支仍可完整演示 P0 
 
 ## 5. 评审清单（评审人只看这四件事）
 
-- [ ] 接口字段一致：与《三人任务拆分》第 3 节一致——category 用固定值 hospital/grooming/store，距离用米，经纬度为数字，统一返回外壳 {success, data, message}。
+- [ ] 接口字段一致：以 [API 契约](API.md) 的评审结果为准，包括版本前缀、错误结构、地点类别、坐标和距离单位。
 - [ ] 能按 README 启动：按 PR 描述里的命令能跑起来，不依赖未提交的本地文件。
 - [ ] 失败路径可读：接口失败返回明确错误码和可读提示，不是 500 裸奔；前端有加载/错误状态。
 - [ ] 无敏感信息：未提交真实 API Key、.env、真实定位数据、真实对话数据。
@@ -82,7 +82,7 @@ PR7 为加分项，不阻塞演示。未完成时主分支仍可完整演示 P0 
 - 新增或修改的接口（如有）
 
 如何启动：
-- 写明命令，例如 pip install -r requirements.txt、uvicorn app.main:app --reload
+- 写明命令，使用 README 中的 Python 包安装及前后端启动方式。
 
 如何验证：
 1. 正常路径：……
