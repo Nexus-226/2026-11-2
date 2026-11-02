@@ -25,6 +25,32 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 
 开发前请先评审：[技术栈与分层约定](docs/TECH_STACK.md)、[接口契约草案](docs/API.md) 和 [仓库现状与缺项](docs/REPOSITORY_STATUS.md)。Git 协作见 [PR 指南](docs/PR_GUIDE.md)。
 
+## 技术栈
+
+| 部分 | 约定 | 当前状态 |
+|---|---|---|
+| 前端 | React + TypeScript + Vite | 已有可构建的占位页面；业务页面待开发 |
+| 后端 | Python + FastAPI + Pydantic | 已有应用入口和健康检查；业务接口待开发 |
+| Agent | Python Agent 模块、受控工具和 LLM Provider | 目录已预留；模型和工具接入待开发 |
+| 数据 | SQLite + SQLAlchemy 2 + Alembic | 技术选型草案；依赖、模型和迁移尚未配置 |
+| 地图（P1） | 高德开放平台 | 尚未接入；Key 和配额待准备 |
+
+LLM 供应商和具体模型尚未确定。前端锁定的依赖版本见 `frontend/package-lock.json`，详细选型和边界见 [技术栈文档](docs/TECH_STACK.md)。
+
+## 接口速览
+
+业务接口使用 `/api/v1` 前缀；以下是供三人评审的草案，**除健康检查外尚未实现**。
+
+| 接口 | 用途 | 阶段 |
+|---|---|---|
+| `GET /health` | 服务健康检查 | 已实现 |
+| `GET /api/v1/pets`、`POST /api/v1/pets` | 查询列表、新建宠物 | P0 |
+| `GET /api/v1/pets/{pet_id}`、`PATCH /api/v1/pets/{pet_id}`、`DELETE /api/v1/pets/{pet_id}` | 查看、修改、删除宠物 | P0 |
+| `POST /api/v1/chat` | Agent 对话，第一版暂定 JSON 回复 | P0 |
+| `GET /api/v1/nearby`、`GET /api/v1/places/{place_id}` | 附近服务查询和地点详情 | P1 |
+
+宠物字段、错误格式、A/B 工具边界和地图参数以 [接口契约草案](docs/API.md) 为准。契约需三人评审；实现时如有变更，同步更新文档和测试。
+
 ## 启动
 
 需要 Python 3.10+ 和 Node.js 20.19+（或 22.12+）。在项目根目录分别运行：
