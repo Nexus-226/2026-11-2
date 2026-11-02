@@ -25,6 +25,8 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 
 开发前请先评审：[技术栈与分层约定](docs/TECH_STACK.md)、[接口契约草案](docs/API.md) 和 [仓库现状与缺项](docs/REPOSITORY_STATUS.md)。Git 协作见 [PR 指南](docs/PR_GUIDE.md)。
 
+项目优先级：P0 先完成宠物资料与 Agent 对话闭环；P1 再加入附近宠物服务。负责人、依赖、状态和审核安排见 [项目任务表](docs/TASKS.md)。
+
 ## 技术栈
 
 | 部分 | 约定 | 当前状态 |
