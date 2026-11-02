@@ -88,4 +88,19 @@ python -m pytest backend/tests
 npm run build
 ```
 
+Python 使用 Ruff 做检查与格式化，前端使用 Prettier；版本分别固定在 `backend/pyproject.toml` 和 `frontend/package-lock.json`。对本次改动的文件单独运行命令，例如：
+
+```powershell
+# 项目根目录：把路径换成实际改动的 Python 文件
+python -m ruff check backend/app/main.py
+python -m ruff format --check backend/app/main.py
+python -m ruff format backend/app/main.py
+
+# frontend 目录：把路径换成实际改动的前端文件
+npm run format:check -- src/app/App.tsx
+npm run format -- src/app/App.tsx
+```
+
+本 PR 不批量格式化现有文件。`frontend/.prettierignore` 排除了生成文件、锁文件和 Markdown。ESLint 尚未配置，待 C 开发业务页面时确定规则。
+
 P0 后续需实现宠物资料 CRUD、SQLite、Agent 对话和工具调用；P1 再接入高德附近地点查询与地图页面。

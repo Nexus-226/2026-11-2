@@ -1,0 +1,8 @@
+# Dependencies and generated files
+node_modules/
+dist/
+coverage/
+package-lock.json
+
+# Keep Markdown edits manual
+*.md

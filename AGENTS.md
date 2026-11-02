@@ -22,5 +22,6 @@
 - 开始任务时核对 [docs/TASKS.md](docs/TASKS.md)；提 PR 时更新对应任务的状态和链接，合并且验证后再标记已完成。接口、启动方式或实现状态变化时同步相应文档。
 - 后端依赖安装及启动方式见 README；后端改动按需运行 `python -m pytest backend/tests`。
 - 前端依赖安装后，在 `frontend/` 运行 `npm run build`；涉及交互时补充与风险相称的测试。
+- Python 使用 Ruff，前端使用 Prettier；按 README 的检查命令验证，格式化时只处理本次改动的文件，不批量重排 Markdown。ESLint 暂未配置。
 - 不依赖真实 LLM 或地图配额的测试应使用模拟响应；若无法运行检查，要说明原因和未验证范围。
 - 按 [docs/PR_GUIDE.md](docs/PR_GUIDE.md) 小步提交与评审；只在实际完成并验证后更新实现状态。
