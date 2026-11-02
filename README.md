@@ -1,14 +1,61 @@
 # Pet Agent
 
-宠物助手项目的协作起点。当前仓库先放项目说明和三人任务拆分，后续代码由团队按分支逐步加入。
+三人协作的宠物助手项目。当前是可启动的项目骨架：前端展示占位页面，后端提供健康检查；宠物资料和对话等业务功能尚待开发。
 
-## 文档
+## 目录与分工
 
-- [架构与任务说明（易读版）](outputs/Pet-Agent-架构与任务说明.md)：项目如何工作、A/B/C 如何配合，以及三天安排。
-- [三人任务拆分（执行版）](outputs/Pet-Agent-三人任务拆分.md)：P0/P1、接口约定、Git 规则和共同验收清单。
+```text
+frontend/                     C：React + TypeScript 前端
+  src/app/                    入口与应用
+  src/pages/                  对话、宠物资料、附近服务页面
+  src/components/             chat / map / common 组件
+  src/api/ hooks/ types/ styles/
+  tests/
+backend/                      Python + FastAPI 后端
+  app/agent/                  A：Agent Runtime、提示词与工具
+  app/api/ core/ schemas/     B：路由、配置和数据结构
+  app/services/ db/           B：业务服务和数据访问
+  app/integrations/           B：第三方适配
+  migrations/ tests/
+docs/                         架构、接口及技术决策
+scripts/                      开发辅助脚本
+```
 
-## 当前范围
+A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1，目录预留不代表功能已完成。
 
-P0 是“保存宠物资料 → 向 Agent 提问 → 结合资料回答”的完整流程。附近宠物医院、洗护店和用品店的地图查询是 P1；如果团队决定将地图纳入必演示功能，应同步调整 A、B、C 三人的优先级和验收标准。
+## 启动
 
-目前只有规划文档，尚无可运行的项目代码。开发开始时请在 README 中补充环境配置、启动方法和演示步骤。
+需要 Python 3.10+ 和 Node.js 20.19+（或 22.12+）。在项目根目录分别运行：
+
+```powershell
+# 后端
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e "./backend[dev]"
+python -m uvicorn app.main:app --app-dir backend --reload
+```
+
+访问 `http://127.0.0.1:8000/health`，应返回 `{"status":"ok"}`。
+
+```powershell
+# 前端：另开终端
+cd frontend
+npm install
+npm run dev
+```
+
+前端地址以 Vite 的终端输出为准。开发时 `/api` 和 `/health` 会代理至 `http://127.0.0.1:8000`，可通过前端环境变量 `VITE_API_PROXY_TARGET` 修改代理目标。
+
+`.env.example` 仅列出后续接入可能需要的配置；骨架暂不读取这些变量。真实密钥和本地数据库不要提交到 Git。
+
+## 检查
+
+```powershell
+# 项目根目录，已安装后端 dev 依赖
+python -m pytest backend/tests
+
+# frontend 目录，已安装依赖
+npm run build
+```
+
+P0 后续需实现宠物资料 CRUD、SQLite、Agent 对话和工具调用；P1 再接入高德附近地点查询与地图页面。
