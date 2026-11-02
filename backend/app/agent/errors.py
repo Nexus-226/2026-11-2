@@ -22,7 +22,3 @@ class ToolNotFoundError(Exception):
     def __init__(self, name: str) -> None:
         super().__init__(f"未注册的工具: {name}")
         self.name = name
-
-
-class ToolTimeout(Exception):
-    """工具执行超过配置的超时时间。"""

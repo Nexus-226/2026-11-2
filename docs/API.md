@@ -122,7 +122,7 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 | `list_pets` | P0 | 空对象 `{}` | 返回 `Pet[]`，无结果为 `[]` |
 | `search_nearby_pet_services` | P1 | `lat`、`lng`、`type`、`radius_m` | 返回下述 `Place[]`；失败返回可识别错误 |
 
-工具参数经 Pydantic 校验，仅执行注册表允许的工具；每轮最多连续调用 3 次，单次超时由 A/B 配置并在实现时明确。工具无权直接访问数据库或地图客户端，由 Service 层负责。
+工具参数经 Pydantic 校验，仅执行注册表允许的工具；每轮最多连续调用 3 次。P0 工具为本地快速调用，暂不实现工具级超时；真实外部工具接入时再补超时机制。工具无权直接访问数据库或地图客户端，由 Service 层负责。
 
 B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因此 `get_pet(pet_id)` 和 `list_pets()` 不再额外接收数据库 Session；P0-4 聊天路由应通过 `get_db` 获取 Session，构造适配器后传给 A 的 `run_chat(message, pet_id, service)`。`get_pet` 对不存在的宠物返回 `None`，由 `get_pet_profile` 工具映射为 `PET_NOT_FOUND`；Service 与工具共用 `app.schemas.pet.PetRead`。
 
