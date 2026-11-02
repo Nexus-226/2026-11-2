@@ -112,6 +112,8 @@ PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes` 传 `nu
 
 `status` 为 `success` 或 `error`。若无法生成可信回答，返回相应错误状态码，不伪造回复。医疗信息需提醒仅供参考，紧急情况联系兽医。会话及消息持久化由 B 负责；Agent 的工具选择和输出组织由 A 负责；前端显示加载、错误和取消状态由 C 负责。
 
+当前后端路由已接入 A 的 `run_chat`，使用 `BoundPetService` 绑定请求级数据库会话；传入不存在的 `pet_id` 时在调用 Agent 前返回 `404 PET_NOT_FOUND`。会话、用户消息和助手回复持久化到 SQLite。Agent 当前默认使用 `MockProvider`，真实 LLM 尚未接入。
+
 ## A ↔ B：Agent 内部工具约定
 
 Agent 在后端进程内调用注册表中的工具；工具不从前端直接暴露，也不由模型执行任意代码。A 定义输入/输出 Pydantic Schema 和注册协议，B 提供 Service 方法。以下为工具**逻辑契约**，具体函数签名由 A/B 联调确定：
@@ -122,7 +124,9 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 | `list_pets` | P0 | 空对象 `{}` | 返回 `Pet[]`，无结果为 `[]` |
 | `search_nearby_pet_services` | P1 | `lat`、`lng`、`type`、`radius_m` | 返回下述 `Place[]`；失败返回可识别错误 |
 
-工具参数经 Pydantic 校验，仅执行注册表允许的工具；每轮最多连续调用 3 次，单次超时由 A/B 配置并在实现时明确。工具无权直接访问数据库或地图客户端，由 Service 层负责。
+工具参数经 Pydantic 校验，仅执行注册表允许的工具；每轮最多连续调用 3 次。P0 工具为本地快速调用，暂不实现工具级超时；真实外部工具接入时再补超时机制。工具无权直接访问数据库或地图客户端，由 Service 层负责。
+
+B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因此 `get_pet(pet_id)` 和 `list_pets()` 不再额外接收数据库 Session；P0-4 聊天路由应通过 `get_db` 获取 Session，构造适配器后传给 A 的 `run_chat(message, pet_id, service)`。`get_pet` 对不存在的宠物返回 `None`，由 `get_pet_profile` 工具映射为 `PET_NOT_FOUND`；Service 与工具共用 `app.schemas.pet.PetRead`。
 
 ## P1：附近服务
 

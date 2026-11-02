@@ -1,6 +1,6 @@
 # Pet Agent
 
-三人协作的宠物助手项目。前端提供宠物资料和聊天演示页面，后端提供健康检查和基于 SQLite 的宠物资料 CRUD；真实接口联调、Agent 对话与附近服务仍待完成。
+三人协作的宠物助手项目。前端提供宠物资料和聊天演示页面，后端提供健康检查、宠物资料 CRUD 和基于 MockProvider 的 Agent 对话接口；真实 LLM 接入、前后端完整联调与附近服务仍待完成。
 
 ## 目录与分工
 
@@ -34,8 +34,8 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | 部分 | 约定 | 当前状态 |
 |---|---|---|
 | 前端 | React + TypeScript + Vite | 宠物资料和聊天页面支持演示；真实接口联调待完成 |
-| 后端 | Python + FastAPI + Pydantic | 健康检查、宠物资料 CRUD、统一错误响应已实现 |
-| Agent | Python Agent 模块、受控工具和 LLM Provider | 目录已预留；模型和工具接入待开发 |
+| 后端 | Python + FastAPI + Pydantic | 健康检查、宠物资料 CRUD、统一错误响应、对话路由和会话消息持久化已实现 |
+| Agent | Python Agent 模块、受控工具和 LLM Provider | Agent Runtime、宠物工具、对话编排和 MockProvider 已接入；真实模型待接入 |
 | 数据 | SQLite + SQLAlchemy 2 + Alembic | 本地演示用户与宠物资料通过 SQLite/SQLAlchemy 持久化；Alembic 迁移已配置 |
 | 地图（P1） | 高德开放平台 | 尚未接入；Key 和配额待准备 |
 
@@ -50,7 +50,7 @@ LLM 供应商和具体模型尚未确定。前端锁定的依赖版本见 `front
 | `GET /health` | 服务健康检查 | 已实现 |
 | `GET /api/v1/pets`、`POST /api/v1/pets` | 查询列表、新建宠物 | P0，已实现 |
 | `GET /api/v1/pets/{pet_id}`、`PATCH /api/v1/pets/{pet_id}`、`DELETE /api/v1/pets/{pet_id}` | 查看、修改、删除宠物 | P0，已实现 |
-| `POST /api/v1/chat` | Agent 对话，第一版暂定 JSON 回复 | P0 |
+| `POST /api/v1/chat` | Agent 对话，JSON 回复；当前使用 MockProvider | P0，路由与会话存储已实现 |
 | `GET /api/v1/nearby`、`GET /api/v1/places/{place_id}` | 附近服务查询和地点详情 | P1 |
 
 宠物字段、错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。除已决定的宠物字段外，其余接口约定仍需三人评审；实现时如有变更，同步更新文档和测试。
@@ -80,11 +80,11 @@ npm run dev
 
 前端地址以 Vite 的终端输出为准。开发时 `/api` 和 `/health` 会代理至 `http://127.0.0.1:8000`，可通过前端环境变量 `VITE_API_PROXY_TARGET` 修改代理目标。
 
-宠物资料页默认使用本地演示数据，仅保存在当前浏览器，不会同步后端。在 `frontend/.env.local` 中设置 `VITE_PET_DATA_SOURCE=api` 并重新启动前端，即切换到 `/api/v1/pets`；真实接口尚待联调。接口失败时页面显示错误，不会自动回退到演示数据。切换模式不会迁移已有演示资料。
+宠物资料页默认使用本地演示数据，仅保存在当前浏览器，不会同步后端。在 `frontend/.env.local` 中设置 `VITE_PET_DATA_SOURCE=api` 并重新启动前端，即切换到 `/api/v1/pets`；前后端仍需完成联调。接口失败时页面显示错误，不会自动回退到演示数据。切换模式不会迁移已有演示资料。
 
-聊天页默认显示固定的演示回复，不连接真实模型，聊天记录只保留在当前页面。A/B 的对话接口完成后，可在 `frontend/.env.local` 设置 `VITE_CHAT_DATA_SOURCE=api` 并重启前端，切换到 `POST /api/v1/chat`；真实请求失败时不会自动生成模拟回复。若真实对话需要关联宠物，还应设置 `VITE_PET_DATA_SOURCE=api`，并启动 B 的宠物资料接口：本地演示宠物的 ID 不能用于真实对话。
+聊天页默认显示固定的演示回复，不连接真实模型，聊天记录只保留在当前页面。在 `frontend/.env.local` 设置 `VITE_CHAT_DATA_SOURCE=api` 并重启前端，即可切换到已实现的 `POST /api/v1/chat`；当前后端使用 MockProvider，不会生成真实模型回复，请求失败时前端也不会自动生成模拟回复。若对话需要关联宠物，还应设置 `VITE_PET_DATA_SOURCE=api`，并启动后端：本地演示宠物的 ID 不能用于后端对话接口。
 
-取消操作只停止前端等待，服务端可能仍在处理；超时或中断后重试可能产生重复请求。真实接口完成后需与 A/B 联调会话 ID、宠物 ID、错误格式和取消行为。
+取消操作只停止前端等待，服务端可能仍在处理；超时或中断后重试可能产生重复请求。前后端仍需联调会话 ID、宠物 ID、错误格式和取消行为。
 
 `.env.example` 仅列出后续接入可能需要的配置；数据库连接可通过环境变量 `PET_AGENT_DATABASE_URL` 设置。真实密钥和本地数据库不要提交到 Git。
 
@@ -116,4 +116,4 @@ npm run format -- src/app/App.tsx
 
 `.gitattributes` 让 Git 新检出或重新写入的文本文件使用 LF，即使本机设置了 `core.autocrlf=true`；已有工作区文件不会立即自动转换。请先保存本地改动，再按需用编辑器或对应格式化工具转换涉及的文件。
 
-应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。宠物资料 CRUD 与 SQLite 已实现；P0 后续需实现 Agent 对话和工具调用；P1 再接入附近地点查询和地图页面。
+应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。宠物资料 CRUD、Agent 对话路由和会话消息持久化已实现；P0 后续需接入真实 LLM 并完成前后端联调；P1 再接入附近地点查询和地图页面。

@@ -7,12 +7,12 @@
 | 部分 | 技术约定 | 负责人 | 当前状态 |
 |---|---|---|---|
 | 前端 | React 19、TypeScript 5.7、Vite 6；npm，依赖锁定见 `frontend/package-lock.json` | C | 宠物资料和聊天页面支持演示；真实接口联调待做 |
-| 后端入口 | Python 3.10+、FastAPI、Pydantic、Uvicorn | B | FastAPI、Uvicorn 已配置；仅 `GET /health` 已实现 |
-| Agent | Python 模块放在 `backend/app/agent/`；白名单工具、Pydantic 参数校验；LLM 通过 Provider 抽象 | A | 仅目录占位；Runtime、工具和模型接入待做 |
-| 业务服务 | Service 组织业务，外部系统使用独立 Adapter | B；LLM Provider 由 A 与 B 对齐 | 仅目录占位 |
-| 数据库 | SQLite + SQLAlchemy 2 + Alembic 迁移 | B | SQLite/SQLAlchemy 本地演示用户、宠物模型与 CRUD 已实现；启动时由 Alembic 应用迁移 |
+| 后端入口 | Python 3.10+、FastAPI、Pydantic、Uvicorn | B | 健康检查、宠物 CRUD、对话路由和统一错误响应已实现 |
+| Agent | Python 模块放在 `backend/app/agent/`；白名单工具、Pydantic 参数校验；LLM 通过 Provider 抽象 | A | Runtime、宠物工具、对话编排和 MockProvider 已实现；真实 LLM 待接入 |
+| 业务服务 | Service 组织业务，外部系统使用独立 Adapter | B；LLM Provider 由 A 与 B 对齐 | 宠物与对话 Service 已实现；地图适配待做 |
+| 数据库 | SQLite + SQLAlchemy 2 + Alembic 迁移 | B | 宠物、会话和消息已持久化；启动时由 Alembic 应用迁移 |
 | 地图（P1） | 高德开放平台；后端 Web 服务查询 POI，前端地图展示 | B 后端，C 前端，A 工具调用 | 未接入；Key、配额与服务权限待团队准备 |
-| 测试 | 后端 pytest + HTTPX；前端 Vitest + Testing Library + jsdom，另有构建检查 | 各负责人 | 后端健康检查 1 项；前端有聊天交互与 API Client 测试 |
+| 测试 | 后端 pytest + HTTPX；前端 Vitest + Testing Library + jsdom，另有构建检查 | 各负责人 | 后端宠物、Agent 和对话接口有测试；前端有聊天交互与 API Client 测试 |
 | 协作 | Git 短分支 + PR，按 `docs/PR_GUIDE.md` 评审 | 全员 | 指南已入库 |
 
 ## 依赖方向

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app.api.routes import pets
+from app.api.routes import chat, pets
 from app.db.session import init_db
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Pet Agent API", version="0.1.0", lifespan=lifespan)
 app.include_router(pets.router, prefix="/api/v1/pets", tags=["pets"])
+app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 
 
 @app.middleware("http")
@@ -59,14 +60,19 @@ def error_response(
 async def handle_http_error(
     request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
+    code = "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
+    message = "未找到请求的资源" if exc.status_code == 404 else "请求失败"
+    retryable = False
     if isinstance(exc.detail, dict):
-        code = exc.detail["code"]
-        message = exc.detail["message"]
-        retryable = exc.detail.get("retryable", False)
-    else:
-        code = "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
-        message = "未找到请求的资源" if exc.status_code == 404 else "请求失败"
-        retryable = False
+        detail_code = exc.detail.get("code")
+        detail_message = exc.detail.get("message")
+        detail_retryable = exc.detail.get("retryable", False)
+        if isinstance(detail_code, str) and detail_code:
+            code = detail_code
+        if isinstance(detail_message, str) and detail_message:
+            message = detail_message
+        if isinstance(detail_retryable, bool):
+            retryable = detail_retryable
     return error_response(request, exc.status_code, code, message, retryable)
 
 

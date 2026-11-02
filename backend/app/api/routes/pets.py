@@ -25,7 +25,7 @@ def create_pet(pet_in: PetCreate, session: DbSession) -> Pet:
 
 @router.get("/{pet_id}", response_model=PetRead)
 def get_pet(pet_id: UUID, session: DbSession) -> Pet:
-    return pet_service.get_pet(session, pet_id)
+    return pet_service.get_pet_or_404(session, pet_id)
 
 
 @router.patch("/{pet_id}", response_model=PetRead)
