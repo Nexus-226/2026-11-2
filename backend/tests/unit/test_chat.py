@@ -91,3 +91,16 @@ def test_run_chat_replies_after_three_tool_calls() -> None:
     assert reply.reply == "已为你列出宠物。"
     assert len(reply.tool_calls) == 3
     assert all(t.status == "success" for t in reply.tool_calls)
+
+
+def test_run_chat_injects_current_date_into_system_prompt() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat("你好", None, FakePetService([]), provider=CapturingProvider())
+    assert "今天是" in captured["system_prompt"]
+    assert date.today().isoformat() in captured["system_prompt"]
