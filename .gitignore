@@ -1,5 +1,6 @@
 # 本地草稿和临时文件
 work/
+outputs/
 
 # 本地密钥与常见生成文件
 .env
@@ -10,3 +11,11 @@ dist/
 build/
 __pycache__/
 .pytest_cache/
+.venv/
+*.db
+*.sqlite
+*.sqlite3
+frontend/coverage/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
