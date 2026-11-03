@@ -112,20 +112,20 @@ def _runtime(
     *,
     record_service: object = FakeRecordService(),
     reminder_service: object = FakeReminderService(),
+    current_pet_id: UUID | None = PET_ID,
 ) -> AgentRuntime:
     registry = build_default_registry(
         FakePetService(),
         record_service=record_service,  # type: ignore[arg-type]
         reminder_service=reminder_service,  # type: ignore[arg-type]
+        current_pet_id=current_pet_id,
     )
     return AgentRuntime(registry)
 
 
 def test_list_pet_records_returns_records() -> None:
     runtime = _runtime(record_service=FakeRecordService([_record()]))
-    result = runtime.run_tools(
-        [ToolCallRequest(name="list_pet_records", args={"pet_id": str(PET_ID)})]
-    )[0]
+    result = runtime.run_tools([ToolCallRequest(name="list_pet_records", args={})])[0]
     assert result.status == "success"
     assert isinstance(result.data, list)
     assert result.data[0].record_type == "deworming"
@@ -195,16 +195,14 @@ def test_tools_absent_without_service() -> None:
     assert "list_pet_reminders" not in names
 
 
-def test_list_pet_records_isolates_by_pet_id() -> None:
+def test_list_pet_records_is_bound_to_current_pet() -> None:
     other_pet = uuid4()
     records = [
         _record(),  # PET_ID
         _record(pet_id=other_pet, record_type="bath"),
     ]
     runtime = _runtime(record_service=FakeRecordService(records))
-    result = runtime.run_tools(
-        [ToolCallRequest(name="list_pet_records", args={"pet_id": str(PET_ID)})]
-    )[0]
+    result = runtime.run_tools([ToolCallRequest(name="list_pet_records", args={})])[0]
     assert result.status == "success"
     assert [r.pet_id for r in result.data] == [PET_ID]
 
@@ -221,3 +219,49 @@ def test_from_date_after_to_date_is_validation_error() -> None:
     )[0]
     assert result.status == "error"
     assert result.error_code == "VALIDATION_ERROR"
+
+
+def test_list_pet_records_requires_pet_when_unlinked() -> None:
+    runtime = _runtime(
+        record_service=FakeRecordService([_record()]), current_pet_id=None
+    )
+    result = runtime.run_tools([ToolCallRequest(name="list_pet_records", args={})])[0]
+    assert result.status == "error"
+    assert result.error_code == "NO_PET_SELECTED"
+
+
+def test_list_pet_reminders_requires_pet_when_unlinked() -> None:
+    runtime = _runtime(
+        reminder_service=FakeReminderService([_reminder()]), current_pet_id=None
+    )
+    result = runtime.run_tools([ToolCallRequest(name="list_pet_reminders", args={})])[0]
+    assert result.status == "error"
+    assert result.error_code == "NO_PET_SELECTED"
+
+
+def test_list_pet_records_all_pets_queries_all() -> None:
+    other_pet = uuid4()
+    records = [
+        _record(),  # PET_ID
+        _record(pet_id=other_pet, record_type="bath"),
+    ]
+    runtime = _runtime(record_service=FakeRecordService(records))
+    result = runtime.run_tools(
+        [ToolCallRequest(name="list_pet_records", args={"all_pets": True})]
+    )[0]
+    assert result.status == "success"
+    assert {r.pet_id for r in result.data} == {PET_ID, other_pet}
+
+
+def test_list_pet_reminders_all_pets_queries_all() -> None:
+    other_pet = uuid4()
+    reminders = [
+        _reminder(),  # PET_ID
+        _reminder(pet_id=other_pet, title="另一只宠物的提醒"),
+    ]
+    runtime = _runtime(reminder_service=FakeReminderService(reminders))
+    result = runtime.run_tools(
+        [ToolCallRequest(name="list_pet_reminders", args={"all_pets": True})]
+    )[0]
+    assert result.status == "success"
+    assert {r.pet_id for r in result.data} == {PET_ID, other_pet}

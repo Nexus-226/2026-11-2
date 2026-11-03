@@ -151,7 +151,7 @@ def test_chat_route_registers_record_tool_with_real_service(
             ProviderTurn(
                 tool_call=ToolCallRequest(
                     name="list_pet_records",
-                    args={"pet_id": pet_id, "record_type": "deworming"},
+                    args={"record_type": "deworming"},
                 )
             ),
             ProviderTurn(reply="上次驱虫是 2026-10-20。"),
@@ -188,7 +188,7 @@ def test_chat_route_registers_reminder_tool_with_real_service(
             ProviderTurn(
                 tool_call=ToolCallRequest(
                     name="list_pet_reminders",
-                    args={"pet_id": pet_id, "status": "pending"},
+                    args={"status": "pending"},
                 )
             ),
             ProviderTurn(reply="这周有一次驱虫待办。"),

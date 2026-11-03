@@ -94,6 +94,7 @@ def run_chat(
         service,
         record_service=record_service,
         reminder_service=reminder_service,
+        current_pet_id=pet_id,
     )
     runtime = AgentRuntime(registry, max_tool_calls=max_tool_calls)
     provider = provider or build_default_provider()

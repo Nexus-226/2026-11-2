@@ -20,12 +20,12 @@ class ListPetsInput(BaseModel):
 
 
 class ListPetRecordsInput(BaseModel):
-    """``list_pet_records`` 入参；过滤字段均可选。"""
+    """``list_pet_records`` 入参；默认查当前关联宠物，all_pets 显式汇总全部宠物。"""
 
-    pet_id: UUID | None = None
     record_type: Literal["vaccine", "deworming", "bath", "weight"] | None = None
     from_date: date | None = None
     to_date: date | None = None
+    all_pets: bool = False
 
     @model_validator(mode="after")
     def validate_range(self) -> ListPetRecordsInput:
@@ -39,12 +39,12 @@ class ListPetRecordsInput(BaseModel):
 
 
 class ListPetRemindersInput(BaseModel):
-    """``list_pet_reminders`` 入参；过滤字段均可选。"""
+    """``list_pet_reminders`` 入参；默认查当前关联宠物，all_pets 显式汇总全部宠物。"""
 
-    pet_id: UUID | None = None
     status: Literal["pending", "completed", "cancelled"] | None = None
     from_date: date | None = None
     to_date: date | None = None
+    all_pets: bool = False
 
     @model_validator(mode="after")
     def validate_range(self) -> ListPetRemindersInput:

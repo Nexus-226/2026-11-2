@@ -85,7 +85,7 @@ def test_run_chat_uses_record_tool_with_history() -> None:
             ProviderTurn(
                 tool_call=ToolCallRequest(
                     name="list_pet_records",
-                    args={"pet_id": str(PET_ID), "record_type": "deworming"},
+                    args={"record_type": "deworming"},
                 )
             ),
             ProviderTurn(reply="上次驱虫是 2026-10-20。"),
