@@ -212,7 +212,8 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - 请求及响应 `location.lat`/`location.lng` 均为 WGS84 十进制度数；纬度 -90～90，经度 -180～180。高德 Web Service 请求前由后端把 WGS84 转为 GCJ-02；高德返回的 GCJ-02 坐标由后端转回 WGS84。前端地图 SDK 的坐标适配由 C 负责，不向前端暴露高德原始坐标或响应字段。
 - `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。旧架构指南流程图中的 `radius` 在实现时统一使用此处的 `radius_m`。
 - 距离由 B 按 WGS84 查询点和地点坐标使用球面距离计算，四舍五入为非负整数米；仅返回计算距离不超过 `radius_m` 的地点，按距离升序并以 `id` 升序稳定打破并列。高德过滤半径不替代服务端距离校验；演示种子数据使用同一算法。
-- `GET /api/v1/nearby` 返回 `200 NearbyResponse`，地点集合位于 `places`，无结果时为 `[]`。顶层 `source` 为 `amap` 或 `demo`，表示本次响应实际使用的数据；`fallback_reason` 为 `null`、`amap_unavailable` 或 `amap_not_configured`。高德正常返回空列表时是 `source: "amap"`、`places: []`、`fallback_reason: null`，不得当成上游失败；高德不可用并回退演示数据时即使 `places` 为空，也必须通过 `source: "demo"` 和 `fallback_reason: "amap_unavailable"` 标明降级；未配置高德时使用演示数据并标记 `amap_not_configured`。P1-8 纯演示响应为 `source: "demo"`、`fallback_reason: null`。调用失败且没有可用回退结果时返回统一错误体和 `UPSTREAM_ERROR`/`UPSTREAM_TIMEOUT`，不伪装成空结果。
+- 若用户拒绝定位且未配置高德，C 提供用户主动选择的“使用演示区域”入口；B 提供 `GET /api/v1/nearby/demo?type=pet_hospital&radius_m=3000`，使用明确配置的 WGS84 演示中心和种子数据，不需要高德或地址解析。不得自动进入演示区域，也不得将用户输入的地址描述为已解析或使用该地址计算位置。响应必须标记 `search_center.source: "demo_region"`，并显示明确的非实时标签。
+- `GET /api/v1/nearby` 与 `/api/v1/nearby/demo` 均返回 `200 NearbyResponse`，地点集合位于 `places`，无结果时为 `[]`。响应包含 `search_center`（实际查询中心、中心来源及供页面展示的标签）、`source`（本次地点数据来源：`amap` 或 `demo`）和 `fallback_reason`（`null`、`amap_unavailable` 或 `amap_not_configured`）。正常位置查询中 `search_center.source` 为 `user_location` 或 `resolved_address`；演示入口固定为 `demo_region`。高德正常返回空列表时是 `source: "amap"`、`places: []`、`fallback_reason: null`，不得当成上游失败；高德不可用并回退演示数据时即使 `places` 为空，也必须通过 `source: "demo"` 和 `fallback_reason: "amap_unavailable"` 标明降级；未配置高德时，若有用户提供的有效查询中心则可回退演示数据并标记 `amap_not_configured`。P1-8 纯演示响应为 `source: "demo"`、`fallback_reason: null`。调用失败且没有可用回退结果时返回统一错误体和 `UPSTREAM_ERROR`/`UPSTREAM_TIMEOUT`，不伪装成空结果。
 - 拒绝定位时由 C 提供手动输入地址；B 提供 `POST /api/v1/locations/resolve`，请求体为 `{ "address": "..." }`，首尾空白去除后长度为 1–200。返回 `200` 和 `matches` 数组，每项仅包含 `formatted_address`、WGS84 `location` 与 `data_source: "amap"`，不透出厂商原始字段。例如：`{"matches":[{"formatted_address":"北京市示例路 18 号","location":{"lat":39.9001,"lng":116.4001},"data_source":"amap"}]}`。无匹配返回 `404 ADDRESS_NOT_FOUND`；输入校验失败返回 `422 VALIDATION_ERROR`；上游失败/超时分别使用 `502 UPSTREAM_ERROR`/`504 UPSTREAM_TIMEOUT`。多条候选均返回，由用户选择后再查询附近地点；不自动选择第一条。该接口在高德未配置时返回 `503 SERVICE_UNAVAILABLE`，不根据字符串猜坐标。地址和精确坐标仅用于本次请求，不写入业务数据库或日志；高德服务密钥仅由后端读取。
 
 ```json
@@ -229,6 +230,11 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
     "navigation_url":null,
     "data_source":"amap"
   }],
+  "search_center": {
+    "location":{"lat":39.9001,"lng":116.4001},
+    "source":"user_location",
+    "label":"当前位置"
+  },
   "source":"amap",
   "fallback_reason":null
 }
@@ -238,6 +244,8 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 
 数据来源和 ID 约定：真实高德数据使用 `data_source: "amap"`、`id: "amap:<高德地点 ID>"`；种子演示数据使用 `data_source: "demo"`、`id: "demo:<稳定的演示地点 ID>"`。前端和 Agent 必须明确标注演示数据，不能称为实时结果。高德不可用时如果回落演示数据，也必须标注来源；不能提供真实导航时 `navigation_url` 为 `null`。
 
-`GET /api/v1/places/{place_id}?lat=39.9001&lng=116.4001` 返回 `200 Place`；详情中的 `distance_m` 依赖用户位置，因此必须附带 `lat`、`lng`，规则同上。地点无效返回 `404 PLACE_NOT_FOUND`。地图与列表使用同一 `NearbyResponse.places` 结果集；地图渲染失败需保留列表或给出可理解错误。
+演示区域响应沿用 `NearbyResponse` 结构，`search_center.source` 为 `demo_region`、`search_center.label` 明确为“演示区域（非实时位置）”；使用部署配置的演示中心，不把输入地址映射到此中心。该入口仅展示演示地点，`data_source` 与 ID 保持 `demo`。
 
-**P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、地址解析候选选择与错误行为。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
+`GET /api/v1/places/{place_id}?lat=39.9001&lng=116.4001` 返回 `200 Place`；详情中的 `distance_m` 依赖查询中心，因此必须附带 `lat`、`lng`，规则同上。按 ID 来源只查询对应数据源：`amap:<id>` 只查高德，`demo:<id>` 只查演示目录。对象不存在返回 `404 PLACE_NOT_FOUND`；高德未配置或查询失败时对 `amap:<id>` 返回可识别的 `503 SERVICE_UNAVAILABLE`、`502 UPSTREAM_ERROR` 或 `504 UPSTREAM_TIMEOUT`，绝不静默替换成演示地点；演示地点也不回退为高德结果。地图与列表使用同一 `NearbyResponse.places` 结果集；地图渲染失败需保留列表或给出可理解错误。
+
+**P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
