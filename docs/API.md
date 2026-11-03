@@ -207,9 +207,10 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 
 本节为 B 提交的 P1-7 契约提案，尚未实现或冻结。A、C 确认地点结构、坐标、距离、来源/回退状态和手动地址流程后，P1-8 才按演示数据实现，P1-9 再单独接入高德；两者不得合并成一个 PR。
 
-附近查询：`GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000`。
+附近查询：`GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000&center_source=user_location`。
 
 - 请求及响应 `location.lat`/`location.lng` 均为 WGS84 十进制度数；纬度 -90～90，经度 -180～180。高德 Web Service 请求前由后端把 WGS84 转为 GCJ-02；高德返回的 GCJ-02 坐标由后端转回 WGS84。前端地图 SDK 的坐标适配由 C 负责，不向前端暴露高德原始坐标或响应字段。
+- `/nearby` 接受 `center_source` 查询参数，取值为 `user_location` 或 `resolved_address`，省略时默认为 `user_location`；非法值返回 `422 VALIDATION_ERROR`。地址解析返回候选后，前端将用户选择的 WGS84 坐标及 `center_source=resolved_address` 一并用于附近查询。后端在 `search_center.source` 原样返回该值。`search_center.label` 由后端按来源生成：`user_location` 为“当前位置”，`resolved_address` 为“所选地址”；不回显或持久化原始地址。演示接口不接受该参数，固定返回 `source: "demo_region"` 和“演示区域（非实时位置）”标签。
 - `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。旧架构指南流程图中的 `radius` 在实现时统一使用此处的 `radius_m`。
 - 距离由 B 按 WGS84 查询点和地点坐标使用球面距离计算，四舍五入为非负整数米；仅返回计算距离不超过 `radius_m` 的地点，按距离升序并以 `id` 升序稳定打破并列。高德过滤半径不替代服务端距离校验；演示种子数据使用同一算法。
 - 若用户拒绝定位且未配置高德，C 提供用户主动选择的“使用演示区域”入口；B 提供 `GET /api/v1/nearby/demo?type=pet_hospital&radius_m=3000`，使用明确配置的 WGS84 演示中心和种子数据，不需要高德或地址解析。不得自动进入演示区域，也不得将用户输入的地址描述为已解析或使用该地址计算位置。响应必须标记 `search_center.source: "demo_region"`，并显示明确的非实时标签。
@@ -248,4 +249,4 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 
 `GET /api/v1/places/{place_id}?lat=39.9001&lng=116.4001` 返回 `200 Place`；详情中的 `distance_m` 依赖查询中心，因此必须附带 `lat`、`lng`，规则同上。按 ID 来源只查询对应数据源：`amap:<id>` 只查高德，`demo:<id>` 只查演示目录。对象不存在返回 `404 PLACE_NOT_FOUND`；高德未配置或查询失败时对 `amap:<id>` 返回可识别的 `503 SERVICE_UNAVAILABLE`、`502 UPSTREAM_ERROR` 或 `504 UPSTREAM_TIMEOUT`，绝不静默替换成演示地点；演示地点也不回退为高德结果。地图与列表使用同一 `NearbyResponse.places` 结果集；地图渲染失败需保留列表或给出可理解错误。
 
-**P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
+**P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、`center_source` 来源传递与标签生成规则、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
