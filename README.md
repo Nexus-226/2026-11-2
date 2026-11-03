@@ -1,13 +1,13 @@
 # Pet Agent
 
-三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 仍需完成全流程验收和会话上下文修复；P1 全部未开始，真实 POI 尚未查通。
+三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 仍需完成全流程验收和会话上下文修复；P1-1 契约已获 A/C 确认，P1-2 记录后端正在本 PR 实现，提醒、页面、Agent 查询及附近服务尚未完成，真实 POI 尚未查通。
 
 ## 目录与分工
 
 ```text
 frontend/                     C：React + TypeScript 前端
   src/app/                    入口与应用
-  src/pages/                  已有对话、宠物资料页面；记录/待办/附近服务待实现
+  src/pages/                  已有对话、宠物资料页面；记录/待办/附近服务页面待实现
   src/components/             chat / map / common 组件
   src/api/ hooks/ types/ styles/
   tests/
@@ -51,9 +51,10 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | `GET /api/v1/pets`、`POST /api/v1/pets` | 查询列表、新建宠物 | P0，已实现 |
 | `GET /api/v1/pets/{pet_id}`、`PATCH /api/v1/pets/{pet_id}`、`DELETE /api/v1/pets/{pet_id}` | 查看、修改、删除宠物 | P0，已实现 |
 | `POST /api/v1/chat` | Agent 对话，JSON 回复；有 LLM_API_KEY 使用 Qwen，否则使用 MockProvider | P0，路由与会话存储已实现；模型历史上下文待修复 |
+| `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端正在本 PR 提交；前端页面待实现 |
 | `GET /api/v1/nearby`、`GET /api/v1/places/{place_id}` | 附近服务查询和地点详情 | P1 |
 
-宠物字段、错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。除已决定的宠物字段外，其余接口约定仍需三人评审；实现时如有变更，同步更新文档和测试。
+宠物字段、记录/提醒错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。记录/提醒契约已由 A/C 确认；其他 P1 接口约定仍需三人评审。实现时如有变更，同步更新文档和测试。
 
 宠物资料的字段已决定：P0 使用可为空的 `birthday` 和 `notes`，不新增 `age`、`health_notes`。生日不详时可在 `notes` 写大概年龄，不推测生日；其他接口约定仍需评审。
 
