@@ -27,6 +27,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
   const [draft, setDraft] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [selectedPetId, setSelectedPetId] = useState("");
+  const selectedPetIdRef = useRef("");
   const [pets, setPets] = useState<Pet[]>([]);
   const [petsLoading, setPetsLoading] = useState(false);
   const [petsError, setPetsError] = useState("");
@@ -43,7 +44,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
   useEffect(() => {
     if (!active) return;
     if (!canSelectPets) {
-      setSelectedPetId("");
+      clearInvalidPet();
       setPets([]);
       setPetsLoading(false);
       setPetsError("");
@@ -57,14 +58,14 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
       .then((items) => {
         if (!current) return;
         setPets(items);
-        setSelectedPetId((previous) =>
-          items.some((item) => item.id === previous) ? previous : "",
-        );
+        if (!items.some((item) => item.id === selectedPetIdRef.current)) {
+          clearInvalidPet();
+        }
       })
       .catch((error: unknown) => {
         if (!current) return;
         setPets([]);
-        setSelectedPetId("");
+        clearInvalidPet();
         setPetsError(messageFromError(error));
       })
       .finally(() => {
@@ -121,7 +122,11 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
         },
       ]);
     } catch (error) {
-      if (controller.signal.reason === "unmount") return;
+      if (
+        requestRef.current !== controller ||
+        controller.signal.reason === "unmount"
+      )
+        return;
       if (controller.signal.aborted) {
         setNotice(
           controller.signal.reason === "timeout"
@@ -133,10 +138,12 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
       }
       setFailedRequest(request);
     } finally {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-      if (requestRef.current === controller) requestRef.current = null;
-      if (controller.signal.reason !== "unmount") setBusy(false);
+      if (requestRef.current === controller) {
+        if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+        requestRef.current = null;
+        if (controller.signal.reason !== "unmount") setBusy(false);
+      }
     }
   }
 
@@ -157,18 +164,49 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
     );
   }
 
+  function resetSession(notice = "") {
+    requestRef.current?.abort("session-reset");
+    requestRef.current = null;
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setBusy(false);
+    setMessages([]);
+    setDraft("");
+    setSessionId(null);
+    setFailedRequest(null);
+    setNotice(notice);
+  }
+
+  function clearInvalidPet() {
+    if (!selectedPetIdRef.current) return;
+    selectedPetIdRef.current = "";
+    setSelectedPetId("");
+    resetSession("关联宠物已失效或暂时无法验证，已清空关联并开始新对话。");
+  }
+
   function startNewSession() {
+    if (requestRef.current) return;
     if (
       messages.length > 0 &&
       !window.confirm("确定开始新对话吗？当前页面的聊天记录将清空。")
     ) {
       return;
     }
-    setMessages([]);
-    setDraft("");
-    setSessionId(null);
-    setNotice("");
-    setFailedRequest(null);
+    resetSession();
+  }
+
+  function changePet(nextPetId: string) {
+    if (requestRef.current || nextPetId === selectedPetId) return;
+    if (
+      messages.length > 0 &&
+      !window.confirm(
+        "切换或清空关联宠物将开始新对话，当前页面的聊天记录将清空。是否继续？",
+      )
+    )
+      return;
+    selectedPetIdRef.current = nextPetId;
+    setSelectedPetId(nextPetId);
+    resetSession("关联宠物已变更，已开始新对话。");
   }
 
   return (
@@ -234,7 +272,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
               id="chat-pet"
               value={selectedPetId}
               disabled={busy || petsLoading || !canSelectPets}
-              onChange={(event) => setSelectedPetId(event.target.value)}
+              onChange={(event) => changePet(event.target.value)}
             >
               <option value="">暂不关联宠物</option>
               {pets.map((pet) => (
