@@ -60,7 +60,7 @@ P1-1 记录/提醒契约已获 A/C 确认（见 PR #33）；P1-2 后端记录 CR
 | P1-8 | 演示数据版附近接口及地图/列表 | B 主，C 协作 | A | P1-7、P0-2 | 已完成（B 后端 [PR #40](https://github.com/Nexus-226/2026-11-2/pull/40) 已合并；C 页面 [PR #43](https://github.com/Nexus-226/2026-11-2/pull/43) 已合并并完成联调） | 三类演示地点可按距离展示，地图与列表一致，明确标注数据来源；拒绝定位时用户可主动选择“使用演示区域”，清楚标记非实时位置；按 PR Guide 的 P1 种子数据 PR 提交 |
 | P1-9 | 高德真实接入（三天演示可选；完整 P1 必需） | B | A | P1-8；Key 和配额可用 | 进行中（B 侧后端 [PR #46](https://github.com/Nexus-226/2026-11-2/pull/46)，A 审核） | 真实 POI 查询、去重、排序可用；失败回落演示数据并标注来源；单独提 PR，不阻塞演示数据版 |
 | P1-10 | 定位与手动地址回退 | C，B 协作 | B | P1-7；联调依赖 P1-8 | 未开始 | 有定位用途说明；拒绝定位后可输入地址；导航由用户主动触发 |
-| P1-11 | Agent 附近搜索工具 | A，B 协作 | B、C | P1-7；联调依赖 P1-8 | 进行中（A 工具框架在 `feat/agent-p1-11-nearby-tool`，已接入 B 的 `BoundNearbyService`；参数由工具入参 Schema 校验） | 白名单工具通过 Service 查询，参数、数据来源和异常正确处理 |
+| P1-11 | Agent 附近搜索工具 | A，B 协作 | B、C | P1-7；联调依赖 P1-8 | 已完成（[PR #47](https://github.com/Nexus-226/2026-11-2/pull/47) 已合并） | 白名单工具通过 Service 查询，参数、数据来源和异常正确处理 |
 | P1-12 | 地图端到端验收 | A、B、C | 三人共同验收 | P1-8、P1-10、P1-11；完整 P1 验收还依赖 P1-9 | 未开始 | 验证三类地点、定位拒绝/手动地址、空结果与失败路径；记录演示或真实数据来源，完整 P1 须验证真实高德 |
 
 P1-8 对应 PR Guide 中“种子数据版附近门店”的 PR；P1-9 对应独立的高德 Adapter PR，三天演示可以暂不做，但完整 P1 验收需要它。P1-10/P1-11 可按工作量拆成独立小 PR；没有真实高德接入时不能把演示数据说成实时结果。
@@ -82,6 +82,13 @@ P1-8 对应 PR Guide 中“种子数据版附近门店”的 PR；P1-9 对应独
 - 未配置高德回落演示数据并标注 `amap_not_configured`；高德超时/失败回落并标注 `amap_unavailable`；回落沿用原查询中心与来源，不切换演示中心，`places` 允许为空。
 - `amap:` 前缀详情改走 `v5/place/detail`：未配置 503、失败 502、超时 504、不存在 404，不跨来源回退；`category` 由高德类型文本映射（美容/医院/用品关键词），无法识别时归入 `pet_store`；`business_status` 固定 `unknown`，`phone` 取自 `business.tel`。
 - 测试全部使用 httpx MockTransport 模拟高德响应，不依赖真实 Key 或配额；WGS84↔GCJ-02 转换以 eviltransform 公开测试向量（北京/上海/深圳）校验。本 PR 分支后端 153 项测试（含新增 25 项）与 Ruff 检查通过。
+
+### P1-11 Agent 附近搜索工具进展（2026-11-03）
+
+- A 侧注册白名单只读工具 `search_nearby_pet_services`，经 `NearbyService` 协议与 `BoundNearbyService` 接入真实 `/api/v1/chat` 链路；参数由工具入参 Schema 校验（lat/lng/type/radius_m/center_source，与 HTTP 路由同约束），Service 保持无校验。
+- 数据来源/回退如实标注：工具描述与系统提示明确 `source`（amap 真实/demo 演示）与 `fallback_reason`；演示空结果（source=demo、fallback_reason 非空、places=[]）不得推断真实附近没有服务。
+- 真实模型抽查（qwen-plus）两场景通过：演示有数据（正确提取坐标/半径/类型并标注演示来源）、演示空结果（明确「演示数据中未找到」并说明 fallback，未说成真实没有）。
+- 后端 166 项测试（工具层边界 + run_chat 链路 + 路由级集成 + 结果透传 Provider）与 Ruff 检查通过；[PR #47](https://github.com/Nexus-226/2026-11-2/pull/47) 已合并。
 
 记录/提醒的实现边界与演示场景见下文“P1 记录与提醒实施说明”。
 

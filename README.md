@@ -142,7 +142,7 @@ npm run format -- src/app/App.tsx
 - `GET /api/v1/nearby/demo?type=..&radius_m=..`：用户主动选择的演示区域，使用 `PET_AGENT_DEMO_CENTER_LAT/LNG` 配置的演示中心（未配置时用内置默认值），`search_center.source` 固定为 `demo_region`。
 - `GET /api/v1/places/{place_id}?lat=..&lng=..`：`demo:` 前缀查演示目录；`amap:` 前缀只查高德：未配置返回 `503 SERVICE_UNAVAILABLE`、失败/超时返回 502/504、不存在 404，绝不静默替换为演示数据（见下文 P1-9）。
 
-演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层暂依赖调用方校验坐标、类别与半径（HTTP 路由已校验），P1-11 工具直调 Service 前需与 A 明确校验责任。`/locations/resolve` 手动地址解析属 P1-10，尚未实现。
+演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层依赖调用方校验坐标、类别与半径：HTTP 路由与 P1-11 工具入参 Schema 分别校验，Service 保持无校验。`/locations/resolve` 手动地址解析属 P1-10，尚未实现。
 ## P1-8：附近服务页面（C 侧）
 
 导航“附近服务”通过 FastAPI 的 `/api/v1/nearby` 和 `/api/v1/nearby/demo` 查询三类地点，支持半径筛选、地点列表与位置示意图双向选中。位置示意图不是道路地图，不提供导航。
