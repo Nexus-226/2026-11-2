@@ -20,7 +20,12 @@ from app.agent.providers.base import LLMProvider
 from app.agent.providers.factory import build_default_provider
 from app.agent.runtime import MAX_TOOL_CALLS_PER_TURN, AgentRuntime
 from app.agent.schemas import ChatHistoryMessage, ToolResult
-from app.agent.service_protocol import PetService, RecordService, ReminderService
+from app.agent.service_protocol import (
+    NearbyService,
+    PetService,
+    RecordService,
+    ReminderService,
+)
 from app.agent.tools import build_default_registry
 
 # 最近 10 个完整轮次（20 条消息）；字符数只是保守预算，给系统提示、本次问题、
@@ -86,6 +91,7 @@ def run_chat(
     *,
     record_service: RecordService | None = None,
     reminder_service: ReminderService | None = None,
+    nearby_service: NearbyService | None = None,
     provider: LLMProvider | None = None,
     max_tool_calls: int = MAX_TOOL_CALLS_PER_TURN,
     history: list[ChatHistoryMessage] | None = None,
@@ -94,6 +100,7 @@ def run_chat(
         service,
         record_service=record_service,
         reminder_service=reminder_service,
+        nearby_service=nearby_service,
         current_pet_id=pet_id,
     )
     runtime = AgentRuntime(registry, max_tool_calls=max_tool_calls)
