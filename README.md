@@ -130,5 +130,14 @@ npm run format -- src/app/App.tsx
 ## P1-4：待办提醒页面（C 侧开发）
 导航“待办提醒”支持创建、编辑、完成、取消和删除提醒，按到期日期分组展示（逾期/今天/即将/更晚，以及已完成/已取消）。分组直接使用后端返回的 `due_group`，前端不重新计算。默认是浏览器本地演示数据，与后端数据分开。
 设置 `VITE_REMINDER_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/reminders`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地提醒。已与 B 的 P1-4 后端（PR #38）完成真实联调。
+
+## P1-8：附近服务页面（C 侧）
+
+导航“附近服务”通过 FastAPI 的 `/api/v1/nearby` 和 `/api/v1/nearby/demo` 查询三类地点，支持半径筛选、地点列表与位置示意图双向选中。位置示意图不是道路地图，不提供导航。
+
+需启动包含 PR #40 的后端；前端沿用 Vite 的 `VITE_API_PROXY_TARGET` 代理，无需新增数据模式开关。页面不会自动定位或自动进入演示区域，用户拒绝定位后仍可点击“使用演示区域”。接口错误明确展示，不在前端伪造演示结果。地点与查询中心来源、回退原因及空结果按后端响应展示；定位仅保存在当前页面内存。
+
+手动地址解析、真实地图 SDK、高德接入及 Agent 附近查询不在本次页面范围。P1-8 真实联调已由用户确认通过（2026-11-03），PR #40 已合并，C 页面 PR #43 待合并。
+
 - `GET /api/v1/nearby?lat=..&lng=..&type=..&radius_m=..`：高德未接入前按 P1-7 契约回退演示种子数据，返回 `source: "demo"`、`fallback_reason: "amap_not_configured"`，并沿用请求中心计算距离。
 - `GET /api/v1/nearby/demo?type=..&radius_m=..`：用户主动选择的演示区域，使用 `PET_AGENT_DEMO_CENTER_LAT/LNG` 配置的演示中心（未配置时用内置默认值），`search_center.source` 固定为 `demo_region`。
