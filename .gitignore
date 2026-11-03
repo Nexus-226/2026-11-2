@@ -24,3 +24,7 @@ frontend/coverage/
 *.egg-info/
 .mypy_cache/
 .ruff_cache/
+
+# 本地工作树与同步备份（不提交）
+.worktrees/
+.sync-backup-*/
