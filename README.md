@@ -142,7 +142,7 @@ npm run format -- src/app/App.tsx
 - `GET /api/v1/nearby/demo?type=..&radius_m=..`：用户主动选择的演示区域，使用 `PET_AGENT_DEMO_CENTER_LAT/LNG` 配置的演示中心（未配置时用内置默认值），`search_center.source` 固定为 `demo_region`。
 - `GET /api/v1/places/{place_id}?lat=..&lng=..`：`demo:` 前缀查演示目录；`amap:` 前缀只查高德：未配置返回 `503 SERVICE_UNAVAILABLE`、失败/超时返回 502/504、不存在 404，绝不静默替换为演示数据（见下文 P1-9）。
 
-演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层暂依赖调用方校验坐标、类别与半径（HTTP 路由已校验），P1-11 工具直调 Service 前需与 A 明确校验责任。`/locations/resolve` 手动地址解析属 P1-10，尚未实现。
+演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层暂依赖调用方校验坐标、类别与半径（HTTP 路由已校验），P1-11 工具直调 Service 前需与 A 明确校验责任。手动地址解析见下文 P1-10。
 ## P1-8：附近服务页面（C 侧）
 
 导航“附近服务”通过 FastAPI 的 `/api/v1/nearby` 和 `/api/v1/nearby/demo` 查询三类地点，支持半径筛选、地点列表与位置示意图双向选中。位置示意图不是道路地图，不提供导航。
@@ -156,5 +156,9 @@ npm run format -- src/app/App.tsx
 配置 `AMAP_WEB_SERVICE_KEY`（高德 Web 服务 Key）后，`/api/v1/nearby` 通过高德 POI 2.0（v5 `place/around`）查询真实地点：按类别使用关键字召回（宠物医院/动物医院、宠物美容/SPA/洗护、宠物用品/宠物店），请求前把 WGS84 转为 GCJ-02，返回坐标转回 WGS84；坐标转换收敛在后端 `app/services/amap.py`，不透出高德原始响应或未转换坐标。距离仍由服务端按 WGS84 球面距离计算并过滤半径，结果按 `(distance_m, id)` 稳定排序并按高德地点 ID 去重；`category` 由高德类型文本映射，`business_status` 固定 `unknown`（高德无可靠营业状态），`phone` 取自高德 `business.tel`，`navigation_url` 保持 `null`。高德正常返回空列表时 `source: "amap"`、`places: []`，不算失败。
 
 高德未配置或调用失败时按 P1-7 契约回落演示种子数据并标注来源：未配置为 `fallback_reason: "amap_not_configured"`，超时/失败为 `fallback_reason: "amap_unavailable"`；回落沿用原查询中心与 `search_center`，不切换演示中心。`GET /api/v1/places/amap:<id>` 走 v5 `place/detail`：未配置 503、上游失败 502、超时 504、不存在 404，绝不静默替换为演示数据。密钥仅由后端读取，不写入日志或错误响应。相关测试（25 项）全部使用 httpx MockTransport 模拟高德响应，不依赖真实 Key 或配额；坐标转换以 eviltransform 公开测试向量校验。
+
+## P1-10：定位用途说明与手动地址回退（B/C 协作）
+
+拒绝定位或不便使用定位时，“附近服务”页面提供手动地址回退：输入地址 → `POST /api/v1/locations/resolve` 解析为 WGS84 候选 → 用户自行选择候选 → 以 `center_source=resolved_address` 查询附近。后端通过高德 v3 `geocode/geo` 解析，坐标转换与字段收敛复用 `app/services/amap.py`：候选仅含 `formatted_address`、WGS84 `location` 与 `data_source`，多条候选全部返回且不自动选择第一条；无匹配 404 `ADDRESS_NOT_FOUND`、输入非法 422 `VALIDATION_ERROR`、未配置高德 503、上游失败/超时 502/504，均不做演示回退或字符串猜坐标。地址与坐标仅用于本次请求，不写入业务数据库或日志；页面明确说明定位用途，地址输入不自动触发任何查询。导航链接由 C 侧把 WGS84 转为 GCJ-02 后生成（`src/lib/coords.ts`，以 eviltransform 同源向量测试），仅在高德真实地点（`data_source: "amap"`）的卡片上提供，用户点击后在新窗口打开；演示地点为虚构数据，不提供导航入口。
 
 
