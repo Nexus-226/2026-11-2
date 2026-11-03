@@ -220,7 +220,7 @@ def test_chat_route_registers_nearby_tool_with_real_service(
                     args={"lat": 39.9001, "lng": 116.4001, "type": "pet_hospital"},
                 )
             ),
-            ProviderTurn(reply="附近暂时没有匹配的宠物医院。"),
+            ProviderTurn(reply="实时高德服务未接入，以下为演示数据，仅供参考。"),
         ]
     )
 
@@ -233,7 +233,7 @@ def test_chat_route_registers_nearby_tool_with_real_service(
     assert result["tool_calls"] == [
         {"name": "search_nearby_pet_services", "status": "success"}
     ]
-    assert result["reply"] == "附近暂时没有匹配的宠物医院。"
+    assert result["reply"] == "实时高德服务未接入，以下为演示数据，仅供参考。"
 
 
 def test_chat_route_returns_pet_not_found_instead_of_internal_error(

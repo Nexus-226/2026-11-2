@@ -43,6 +43,8 @@ def make_nearby_tools(service: NearbyService) -> list[Tool]:
                 "只引用返回的地点，缺失字段标为未知；演示数据或回退状态要如实告知，"
                 "不能说成实时结果；导航链接只能由用户主动打开。查询失败会返回错误，"
                 "不要把失败说成没有结果。"
+                "source=demo 且 fallback_reason 非空、places 为空时，只能说明演示数据中"
+                "没有该范围内的地点，不能推断真实附近没有服务，应说明实时服务未接入/不可用。"
             ),
             input_schema=SearchNearbyPetServicesInput,
             func=search_nearby_pet_services,
