@@ -165,6 +165,68 @@
   font-size: 11px;
   pointer-events: none;
 }
+.address-search {
+  margin-top: 24px;
+  background: white;
+  border: 1px solid #e0e7df;
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: grid;
+  gap: 10px;
+}
+.address-search h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.address-search p {
+  margin: 0;
+  color: #5c6f68;
+  font-size: 14px;
+}
+.address-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.address-label {
+  font-size: 14px;
+}
+.address-input {
+  flex: 1 1 260px;
+  padding: 10px 12px;
+  border: 1px solid #cbd8d0;
+  border-radius: 8px;
+  font: inherit;
+  color: inherit;
+}
+.address-matches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.address-matches button {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  background: white;
+}
+.address-matches span {
+  color: #5c6f68;
+  font-size: 13px;
+}
+.place-list li {
+  display: grid;
+  gap: 6px;
+}
+.place-nav {
+  justify-self: start;
+  color: #1f6f43;
+  font-size: 14px;
+}
 @media (max-width: 900px) {
   .nearby-layout {
     grid-template-columns: 1fr;

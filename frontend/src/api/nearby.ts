@@ -1,4 +1,8 @@
-import type { NearbyCategory, NearbyResponse } from "../types/nearby";
+import type {
+  AddressMatch,
+  NearbyCategory,
+  NearbyResponse,
+} from "../types/nearby";
 
 export type NearbyCenterSource = "user_location" | "resolved_address";
 
@@ -104,3 +108,52 @@ export const nearbyClient = {
     return request(`/demo?${params}`);
   },
 };
+
+function validMatch(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const match = value as Record<string, unknown>;
+  return (
+    typeof match.formatted_address === "string" &&
+    match.formatted_address.trim().length > 0 &&
+    match.data_source === "amap" &&
+    validLocation(match.location)
+  );
+}
+
+export async function resolveAddress(address: string): Promise<AddressMatch[]> {
+  let response: Response;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    response = await fetch("/api/v1/locations/resolve", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ address }),
+      signal: controller.signal,
+    });
+  } catch {
+    if (controller.signal.aborted)
+      throw new Error("地址解析请求超时，请重试。");
+    throw new Error("无法连接后端，请检查服务后重试。");
+  } finally {
+    window.clearTimeout(timeout);
+  }
+  if (!response.ok) {
+    let message = `地址解析失败（${response.status}）`;
+    try {
+      const body = await response.json();
+      if (typeof body?.error?.message === "string")
+        message = body.error.message;
+    } catch {
+      /* status fallback */
+    }
+    throw new Error(message);
+  }
+  const data = await response.json();
+  if (!data || !Array.isArray(data.matches) || !data.matches.every(validMatch))
+    throw new Error("地址解析返回格式错误。");
+  return data.matches as AddressMatch[];
+}
