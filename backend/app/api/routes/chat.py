@@ -7,6 +7,7 @@ from app.agent.chat import run_chat
 from app.agent.errors import ProviderError
 from app.agent.providers.base import LLMProvider
 from app.agent.providers.factory import build_default_provider
+from app.agent.schemas import ChatHistoryMessage
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services import chat_service
@@ -46,22 +47,52 @@ def create_chat(
         )
 
     chat_session = chat_service.get_or_create_chat_session(session, request.session_id)
-    try:
-        result = run_chat(request.message, request.pet_id, service, provider=provider)
-    except ProviderError as exc:
-        raise HTTPException(
-            status_code=_PROVIDER_ERROR_STATUS.get(exc.code, 502),
-            detail={"code": exc.code, "message": exc.message, "retryable": True},
-        ) from exc
-    assistant_message = chat_service.save_chat_turn(
-        session,
-        chat_session,
-        message=request.message,
-        pet_id=request.pet_id,
-        reply=result,
-    )
+    session_id = chat_session.id
+    session.rollback()
+    with chat_service.serialize_chat_session(session_id):
+        history: list[ChatHistoryMessage]
+        history, expected_sequence = chat_service.get_chat_history(
+            session, chat_session, pet_id=request.pet_id
+        )
+        session.rollback()
+        try:
+            result = run_chat(
+                request.message,
+                request.pet_id,
+                service,
+                provider=provider,
+                history=history,
+            )
+        except ProviderError as exc:
+            raise HTTPException(
+                status_code=_PROVIDER_ERROR_STATUS.get(exc.code, 502),
+                detail={"code": exc.code, "message": exc.message, "retryable": True},
+            ) from exc
+        finally:
+            session.rollback()
+
+        try:
+            assistant_message = chat_service.save_chat_turn(
+                session,
+                chat_session,
+                session_id,
+                message=request.message,
+                pet_id=request.pet_id,
+                reply=result,
+                expected_sequence=expected_sequence,
+            )
+        except chat_service.ChatTurnConflict as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "HTTP_ERROR",
+                    "message": "会话内容已更新，请重新发送本轮",
+                    "retryable": True,
+                },
+            ) from exc
+
     return ChatResponse(
-        session_id=chat_session.id,
+        session_id=session_id,
         message_id=assistant_message.id,
         reply=result.reply,
         tool_calls=result.tool_calls,
