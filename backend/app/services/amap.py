@@ -230,10 +230,12 @@ class AMapClient:
 
 
 def _parse_geocodes(payload: dict[str, object]) -> list[AMapGeocodeMatch]:
-    """解析地理编码候选；无匹配或结构异常时返回空列表，由上层 404。"""
+    """解析地理编码候选；geocodes 缺失或非数组视为上游异常，空数组为无匹配。"""
     geocodes = payload.get("geocodes")
     if not isinstance(geocodes, list):
-        return []
+        # 与 _parse_pois 一致：geocodes 结构异常按"上游不可用"处理（映射 502），
+        # 不能伪装成"无匹配"（映射 404）；合法的空数组才表示无匹配。
+        raise AMapUnavailable("高德返回的 geocodes 结构异常")
     matches: list[AMapGeocodeMatch] = []
     for item in geocodes:
         match = _parse_geocode(item)

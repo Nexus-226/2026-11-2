@@ -444,7 +444,8 @@ def resolve_address(address: str) -> AddressResolveResponse:
             },
         )
     try:
-        matches = _amap_client().geocode(address)
+        with _amap_client() as client:
+            matches = client.geocode(address)
     except AMapTimeout as exc:
         logger.warning("地址解析高德超时：%s", exc)
         raise HTTPException(
