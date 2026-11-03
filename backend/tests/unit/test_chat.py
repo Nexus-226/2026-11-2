@@ -106,6 +106,36 @@ def test_run_chat_injects_current_date_into_system_prompt() -> None:
     assert date.today().isoformat() in captured["system_prompt"]
 
 
+def test_run_chat_prompt_marks_no_associated_pet() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat("它吃什么过敏？", None, FakePetService([]), provider=CapturingProvider())
+    assert "当前未关联任何宠物" in captured["system_prompt"]
+    assert "不要用全部宠物列表代替" in captured["system_prompt"]
+
+
+def test_run_chat_prompt_distinguishes_name_and_nickname() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "刚才的昵称是什么？",
+        PET_ID,
+        FakePetService([_pet()]),
+        provider=CapturingProvider(),
+    )
+    assert "不是用户在会话里临时起的昵称" in captured["system_prompt"]
+
+
 class HistoryCapturingProvider:
     def __init__(self) -> None:
         self.history: list[ChatHistoryMessage] | None = None
