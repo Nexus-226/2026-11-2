@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图尚未实现。实现状态说明不改变以下既有接口契约；新增记录/提醒契约待 P1-1 评审。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图尚未实现。实现状态说明不改变以下既有接口契约；记录/提醒契约已由 A/C 确认（PR #33），记录后端由 P1-2 实现，提醒仍待 P1-4。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
 
 ## 共同规则
 
@@ -17,7 +17,7 @@
 | 状态码 | 场景 | 示例 code |
 |---|---|---|
 | 400 | JSON 无法解析或参数组合不合法 | `BAD_REQUEST` |
-| 404 | 宠物、会话或地点不存在 | `PET_NOT_FOUND`、`SESSION_NOT_FOUND`、`PLACE_NOT_FOUND` |
+| 404 | 宠物、会话、地点或地址解析结果不存在 | `PET_NOT_FOUND`、`SESSION_NOT_FOUND`、`PLACE_NOT_FOUND`、`ADDRESS_NOT_FOUND` |
 | 409 | 数据状态冲突，例如宠物仍被会话/记录/提醒引用，或来源记录仍被提醒引用 | `PET_IN_USE`、`RECORD_IN_USE` |
 | 422 | 字段缺失、类型或取值校验失败 | `VALIDATION_ERROR` |
 | 429 | 服务限流 | `RATE_LIMITED` |
@@ -122,15 +122,15 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 |---|---|---|---|
 | `get_pet_profile` | P0 | `pet_id`：UUID | 返回上面的 `Pet`；不存在返回可识别的 `PET_NOT_FOUND` |
 | `list_pets` | P0 | 空对象 `{}` | 返回 `Pet[]`，无结果为 `[]` |
-| `search_nearby_pet_services` | P1 | `lat`、`lng`、`type`、`radius_m` | 返回下述 `Place[]`；失败返回可识别错误 |
+| `search_nearby_pet_services` | P1 | `lat`、`lng`、`type`、`radius_m` | 返回下述 `NearbyResponse`；失败返回可识别错误 |
 
 工具参数经 Pydantic 校验，仅执行注册表允许的工具；每轮最多连续调用 3 次。P0 工具为本地快速调用，暂不实现工具级超时；真实外部工具接入时再补超时机制。工具无权直接访问数据库或地图客户端，由 Service 层负责。
 
 B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因此 `get_pet(pet_id)` 和 `list_pets()` 不再额外接收数据库 Session；P0-4 聊天路由应通过 `get_db` 获取 Session，构造适配器后传给 A 的 `run_chat(message, pet_id, service)`。`get_pet` 对不存在的宠物返回 `None`，由 `get_pet_profile` 工具映射为 `PET_NOT_FOUND`；Service 与工具共用 `app.schemas.pet.PetRead`。
 
-## P1-1：日常记录与提醒契约提案（待 A/C 确认）
+## P1-1：日常记录与提醒契约（A/C 已确认）
 
-本节是 P1-1 的接口提案，不是已冻结或已实现的 API。A、C 确认数据字段、日期语义、过滤方式和页面需要后，才能将其作为 P1-2/P1-3/P1-4 的实现契约；若评审有异议，先在本节修订，不兼容地改动既有 P0 接口。
+本节是 P1-1 经 A/C 确认的接口契约；P1-2 实现其中的记录 API，提醒 API 由 P1-4 实现。若后续评审需调整，先在本节修订，不兼容地改动既有 P0 接口。
 
 ### 共同数据规则
 
@@ -140,7 +140,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - 列表没有匹配项时返回 `200 []`。`pet_id` 过滤未提供时返回全部宠物及未关联的数据；传 UUID 时只返回该宠物数据；`unlinked=true` 时只返回 `pet_id=null` 的数据，且不得与 `pet_id` 同时提供。页面查询某只宠物的记录/提醒时必须显式传该宠物的 `pet_id`，不能用未过滤的全量列表替代宠物详情查询；未关联数据作为独立范围展示并标注“未关联宠物”。时间范围首尾均包含，开始日期晚于结束日期返回 `400 BAD_REQUEST`。
 - A↔B Service 约定：记录/提醒查询无匹配数据时返回空列表 `[]`；查询或写入失败时抛出可识别异常，由 HTTP 层映射到本契约对应的错误码（如 `PET_NOT_FOUND`、`RECORD_NOT_FOUND`、`REMINDER_NOT_FOUND`），未预期异常映射为 `500 INTERNAL_ERROR`，不得将失败伪装成空列表。具体异常类型由 A/B 在 Service Protocol 中共享定义；Agent 工具必须保留空结果与异常的区别，以便如实说明“没有记录”或“查询失败”。
 
-### 日常记录（拟议 `Record`）
+### 日常记录（`Record`）
 
 记录类型固定为 `vaccine`、`deworming`、`bath`、`weight`。日期字段 `occurred_on` 表示实际发生日期，不能用记录创建日期代替。
 
@@ -161,11 +161,11 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - `record_type` 必填；`occurred_on` 必填且不得晚于当前 `Asia/Shanghai` 日期。
 - `name` 为可空、去除首尾空格后最长 100 字符的项目/产品名称，可用于疫苗或驱虫记录；`notes` 为可空、最长 2000 字符。
 - `weight_kg` 仅 `weight` 类型必填，使用公斤，数值必须大于 0、最多两位小数、上限 500；其他类型必须为 `null`。不提供可变单位，避免同一字段出现单位换算歧义。
-- 建议端点：`GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}`。列表支持 `pet_id`、`unlinked`、`record_type`、`from_date`、`to_date`；默认按 `occurred_on` 倒序，再按 `created_at` 倒序及 `id` 升序稳定排序。创建返回 `201 Record`，读取/修改返回 `200 Record`，删除返回 `204`。
+- 端点：`GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}`。列表支持 `pet_id`、`unlinked`、`record_type`、`from_date`、`to_date`；默认按 `occurred_on` 倒序，再按 `created_at` 倒序及 `id` 升序稳定排序。创建返回 `201 Record`，读取/修改返回 `200 Record`，删除返回 `204`。
 - 创建仅接受 `pet_id`、`record_type`、`occurred_on`、`name`、`weight_kg`、`notes`；`PATCH` 只修改出现的字段，省略不变，可空字段传 `null` 表示清空。创建或 `PATCH` 包含未知字段，以及空对象 `PATCH`，均返回 `422 VALIDATION_ERROR`。`record_type` 与 `weight_kg` 按更新后的完整对象规则联合校验。记录被删除时不删除引用它的提醒，提醒的 `source_record_id` 清空。
 - 若记录被提醒作为 `source_record_id` 引用，`PATCH` 改变记录的 `pet_id` 不自动修改任何提醒；当新归属会使来源记录与提醒的宠物归属不一致时，返回 `409 RECORD_IN_USE`，用户先解除相关提醒的来源引用后再修改归属。`pet_id` 未改变时允许其他字段正常更新。
 
-### 站内提醒（拟议 `Reminder`）
+### 站内提醒（`Reminder`）
 
 ```json
 {
@@ -185,11 +185,11 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - `status` 为 `pending`、`completed`、`cancelled` 之一；新建时客户端不得传 `status`，服务端默认创建为 `pending`。响应中的 `due_group` 是非持久化派生字段，由 B 的 Service 按 `Asia/Shanghai` 当前日统一计算，供 HTTP 响应和 A 的 Agent 工具共用：`pending` 项按 `due_on` 分为 `overdue`（早于今天）、`today`（今天）、`upcoming`（明日起至第七日，含）或 `later`（第七日之后）；`completed`/`cancelled` 项为 `null`。字段类型为 `ReminderDueGroup = "overdue" | "today" | "upcoming" | "later" | null`。前端和 Agent 不得各自重新计算该分组。`upcoming` 不是持久化状态。
 - P1-5 演示问法使用“未来七天有哪些安排”，范围为 `Asia/Shanghai` 今天至第六日（含），以查询时实际起止日期回应，包含今天并避免与派生分组 `upcoming`（明日至第七日）混淆。用户问“这周”时按 `Asia/Shanghai` 自然周（周一至周日，含今天）理解；如对话上下文表明用户可能指滚动七天，则先澄清。Service 支持任意包含首尾日期的 `from_date`/`to_date` 查询，不将自然周与滚动七天混为一谈。
 - `source_record_id` 可空；非空时记录必须存在，且提醒与来源记录的 `pet_id` 必须一致；提醒 `PATCH` 后按更新后的完整对象校验此约束，而非只校验本次提交的字段。来源记录删除时仅清空该字段，不删除提醒。
-- 建议端点：`GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}`。列表支持 `pet_id`、`unlinked`、`status`、`from_date`、`to_date`（按 `due_on` 过滤）；默认按 `due_on` 正序、`created_at` 正序及 `id` 升序稳定排序。创建返回 `201 Reminder`，读取/修改返回 `200 Reminder`，删除返回 `204`。
+- 端点：`GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}`。列表支持 `pet_id`、`unlinked`、`status`、`from_date`、`to_date`（按 `due_on` 过滤）；默认按 `due_on` 正序、`created_at` 正序及 `id` 升序稳定排序。创建返回 `201 Reminder`，读取/修改返回 `200 Reminder`，删除返回 `204`。
 - 创建仅接受 `pet_id`、`title`、`due_on` 和可选 `source_record_id`；客户端传入 `status` 或任何未知字段均返回 `422 VALIDATION_ERROR`。`PATCH` 仅接受这些可修改字段及 `status`；空对象或包含未知字段返回 `422 VALIDATION_ERROR`。只允许通过 `PATCH status` 将 `pending` 改为 `completed` 或 `cancelled`；对同一状态重复更新幂等成功，不重复产生副作用；两种结束状态不可直接重新打开，需要新建提醒。
-- 提案：只要宠物仍有关联记录或提醒，删除宠物返回既有 `409 PET_IN_USE`，不级联删除或自动解除关联；用户先显式删除/解除关联的记录与提醒，再删除宠物。此沿用 P0 删除错误约定并避免静默丢失历史，需 A/C 确认具体解除关联交互。
+- 只要宠物仍有关联记录或提醒，删除宠物返回既有 `409 PET_IN_USE`，不级联删除或自动解除关联；用户先显式删除/解除关联的记录与提醒，再删除宠物。此沿用 P0 删除错误约定并避免静默丢失历史。
 
-**评审需明确回复：**是否接受 `Asia/Shanghai` 日期语义、`weight_kg` 的精度和上限、`name/notes` 字段、过滤与排序、提醒状态转换、`RECORD_IN_USE` 归属变更保护、创建时服务端默认 `pending`、以及宠物仍有关联记录/提醒时返回 `PET_IN_USE` 的行为。上述内容未获 A/C 确认前，不据此编写 P1-2/P1-4 的数据库迁移、Schema 或 API 实现。
+**评审结论：**A/C 已确认 `Asia/Shanghai` 日期语义、`weight_kg` 精度和上限、字段、过滤与排序、提醒状态转换、`RECORD_IN_USE` 归属变更保护、创建时服务端默认 `pending`，以及宠物仍有关联记录/提醒时返回 `PET_IN_USE` 的行为。具体审批记录见 PR #33。
 
 ## P1：模型可靠性与数据边界（待契约评审）
 
@@ -203,33 +203,41 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - P1 Agent 保持只读，不承诺“已保存/已设置提醒/关闭程序后会通知”。P2 自然语言写入须经可编辑草稿、用户确认及服务端校验后提交，成功、失败和去重按实际接口处理。
 - 附近服务的地点、距离和来源以工具结果为准；缺失的营业时间、携宠规则等标为未知，不编造。演示/真实数据及回退状态需可识别，空结果时也适用。
 
-## P1：附近服务
+## P1-7：附近服务与地址解析契约提案（待 A/C 确认）
 
-`GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000`。
+本节为 B 提交的 P1-7 契约提案，尚未实现或冻结。A、C 确认地点结构、坐标、距离、来源/回退状态和手动地址流程后，P1-8 才按演示数据实现，P1-9 再单独接入高德；两者不得合并成一个 PR。
 
-- `lat`、`lng` 为 WGS84 十进制度数；纬度 -90～90，经度 -180～180。后端适配高德时负责坐标系转换；返回坐标也统一 WGS84，前端地图 SDK 使用时由地图展示适配层按需转换。
+附近查询：`GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000`。
+
+- 请求及响应 `location.lat`/`location.lng` 均为 WGS84 十进制度数；纬度 -90～90，经度 -180～180。高德 Web Service 请求前由后端把 WGS84 转为 GCJ-02；高德返回的 GCJ-02 坐标由后端转回 WGS84。前端地图 SDK 的坐标适配由 C 负责，不向前端暴露高德原始坐标或响应字段。
 - `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。旧架构指南流程图中的 `radius` 在实现时统一使用此处的 `radius_m`。
-- `200` 返回按 `distance_m` 升序的 `Place[]`；无结果为 `[]`。拒绝定位时由前端允许手动输入地址，地址解析接口需在 P1 实现前另行约定，不能假定已实现。
+- 距离由 B 按 WGS84 查询点和地点坐标使用球面距离计算，四舍五入为非负整数米；仅返回计算距离不超过 `radius_m` 的地点，按距离升序并以 `id` 升序稳定打破并列。高德过滤半径不替代服务端距离校验；演示种子数据使用同一算法。
+- `GET /api/v1/nearby` 返回 `200 NearbyResponse`，地点集合位于 `places`，无结果时为 `[]`。顶层 `source` 为 `amap` 或 `demo`，表示本次响应实际使用的数据；`fallback_reason` 为 `null`、`amap_unavailable` 或 `amap_not_configured`。高德正常返回空列表时是 `source: "amap"`、`places: []`、`fallback_reason: null`，不得当成上游失败；高德不可用并回退演示数据时即使 `places` 为空，也必须通过 `source: "demo"` 和 `fallback_reason: "amap_unavailable"` 标明降级；未配置高德时使用演示数据并标记 `amap_not_configured`。P1-8 纯演示响应为 `source: "demo"`、`fallback_reason: null`。调用失败且没有可用回退结果时返回统一错误体和 `UPSTREAM_ERROR`/`UPSTREAM_TIMEOUT`，不伪装成空结果。
+- 拒绝定位时由 C 提供手动输入地址；B 提供 `POST /api/v1/locations/resolve`，请求体为 `{ "address": "..." }`，首尾空白去除后长度为 1–200。返回 `200` 和 `matches` 数组，每项仅包含 `formatted_address`、WGS84 `location` 与 `data_source: "amap"`，不透出厂商原始字段。例如：`{"matches":[{"formatted_address":"北京市示例路 18 号","location":{"lat":39.9001,"lng":116.4001},"data_source":"amap"}]}`。无匹配返回 `404 ADDRESS_NOT_FOUND`；输入校验失败返回 `422 VALIDATION_ERROR`；上游失败/超时分别使用 `502 UPSTREAM_ERROR`/`504 UPSTREAM_TIMEOUT`。多条候选均返回，由用户选择后再查询附近地点；不自动选择第一条。该接口在高德未配置时返回 `503 SERVICE_UNAVAILABLE`，不根据字符串猜坐标。地址和精确坐标仅用于本次请求，不写入业务数据库或日志；高德服务密钥仅由后端读取。
 
 ```json
-[{
-  "id":"amap:example",
-  "name":"安心宠物医院",
-  "category":"pet_hospital",
-  "address":"示例路 18 号",
-  "phone":null,
-  "location":{"lat":39.9001,"lng":116.4001},
-  "distance_m":860,
-  "business_status":"unknown",
-  "navigation_url":null,
-  "data_source":"amap"
-}]
+{
+  "places": [{
+    "id":"amap:example",
+    "name":"安心宠物医院",
+    "category":"pet_hospital",
+    "address":"示例路 18 号",
+    "phone":null,
+    "location":{"lat":39.9001,"lng":116.4001},
+    "distance_m":860,
+    "business_status":"unknown",
+    "navigation_url":null,
+    "data_source":"amap"
+  }],
+  "source":"amap",
+  "fallback_reason":null
+}
 ```
 
 `phone`、`navigation_url` 可为 `null`；`business_status` 为 `open`、`closed`、`unknown`，不可确定时用 `unknown`。有导航链接时必须由用户主动打开。空电话显示“暂无电话”。`distance_m` 为非负整数，单位米。
 
 数据来源和 ID 约定：真实高德数据使用 `data_source: "amap"`、`id: "amap:<高德地点 ID>"`；种子演示数据使用 `data_source: "demo"`、`id: "demo:<稳定的演示地点 ID>"`。前端和 Agent 必须明确标注演示数据，不能称为实时结果。高德不可用时如果回落演示数据，也必须标注来源；不能提供真实导航时 `navigation_url` 为 `null`。
 
-高德失败后回落时，前端还需要知道服务不可用并提供重试；仅依赖列表中的每条 `data_source` 无法表达空列表时的回落状态。P1 实现前由 A、B、C 确认如何传递回落原因和状态（包括空结果）；该部分目前尚未实现或冻结。
+`GET /api/v1/places/{place_id}?lat=39.9001&lng=116.4001` 返回 `200 Place`；详情中的 `distance_m` 依赖用户位置，因此必须附带 `lat`、`lng`，规则同上。地点无效返回 `404 PLACE_NOT_FOUND`。地图与列表使用同一 `NearbyResponse.places` 结果集；地图渲染失败需保留列表或给出可理解错误。
 
-`GET /api/v1/places/{place_id}` 返回 `200` 和单个 `Place`；其中 `distance_m` 依赖用户位置，因此详情请求必须附带 `lat`、`lng`，规则同上。地点无效返回 `404 PLACE_NOT_FOUND`。地图与列表使用同一结果集，地图失败需保留列表或给出可理解错误。
+**P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、地址解析候选选择与错误行为。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
