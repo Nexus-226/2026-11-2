@@ -51,8 +51,8 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | `GET /api/v1/pets`、`POST /api/v1/pets` | 查询列表、新建宠物 | P0，已实现 |
 | `GET /api/v1/pets/{pet_id}`、`PATCH /api/v1/pets/{pet_id}`、`DELETE /api/v1/pets/{pet_id}` | 查看、修改、删除宠物 | P0，已实现 |
 | `POST /api/v1/chat` | Agent 对话，JSON 回复；有 LLM_API_KEY 使用 Qwen，否则使用 MockProvider | P0，路由与会话存储已实现；模型历史上下文待修复 |
-| `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端已随 PR #34 合并；前端页面待实现 |
-| `GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}` | 站内提醒和待办查询及 CRUD | P1-4，后端在本 PR 提交；C 页面待实现 |
+| `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端已随 PR #34 合并；前端页面见 PR #37 |
+| `GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}` | 站内提醒和待办查询及 CRUD | P1-4，后端已随 PR #38 合并；C 页面见 PR #39 |
 | `GET /api/v1/nearby`、`GET /api/v1/places/{place_id}` | 附近服务查询和地点详情 | P1 |
 
 宠物字段、记录/提醒错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。记录/提醒契约已由 A/C 确认；其他 P1 接口约定仍需三人评审。实现时如有变更，同步更新文档和测试。
@@ -126,4 +126,10 @@ npm run format -- src/app/App.tsx
 
 导航“日常记录”支持疫苗、驱虫、洗澡、体重记录的添加、编辑、确认删除及日期倒序时间线，可按宠物、类型和日期范围筛选。默认是浏览器本地演示数据，与后端数据分开。
 
-设置 `VITE_RECORD_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/records`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地记录。真实后端联调依赖 B 的 P1-2；当前不包含提醒创建或 Agent 记录查询。
+设置 `VITE_RECORD_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/records`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地记录。已与 B 的 P1-2 记录后端完成真实联调；提醒创建见 P1-4，Agent 记录查询见 P1-5。
+
+## P1-4：待办提醒页面（C 侧开发）
+
+导航“待办提醒”支持创建、编辑、完成、取消和删除提醒，按到期日期分组展示（逾期/今天/即将/更晚，以及已完成/已取消）。分组直接使用后端返回的 `due_group`，前端不重新计算。默认是浏览器本地演示数据，与后端数据分开。
+
+设置 `VITE_REMINDER_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/reminders`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地提醒。已与 B 的 P1-4 后端（PR #38）完成真实联调。
