@@ -18,7 +18,7 @@
 |---|---|---|
 | 400 | JSON 无法解析或参数组合不合法 | `BAD_REQUEST` |
 | 404 | 宠物、会话或地点不存在 | `PET_NOT_FOUND`、`SESSION_NOT_FOUND`、`PLACE_NOT_FOUND` |
-| 409 | 数据状态冲突，例如宠物仍被会话引用 | `PET_IN_USE` |
+| 409 | 数据状态冲突，例如宠物仍被会话/记录/提醒引用，或来源记录仍被提醒引用 | `PET_IN_USE`、`RECORD_IN_USE` |
 | 422 | 字段缺失、类型或取值校验失败 | `VALIDATION_ERROR` |
 | 429 | 服务限流 | `RATE_LIMITED` |
 | 502 / 503 | 上游响应异常 / 暂不可用 | `UPSTREAM_ERROR`、`SERVICE_UNAVAILABLE` |
@@ -137,7 +137,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - 记录和提醒独立于聊天消息保存。`pet_id` 可为 UUID 或 `null`；未关联宠物的数据仍可创建和查询。
 - `created_at`、`updated_at` 为 UTC ISO 8601 时间戳，`id` 为 UUID。业务日期采用 `YYYY-MM-DD` 日历日期，不伪造具体时刻；首版“今天/逾期/未来七天”按 `Asia/Shanghai` 计算。若后续支持多用户或时区设置，再扩展用户时区，不把日期字符串转换成 UTC 时间戳。
 - 所有输入校验失败返回现有 `422 VALIDATION_ERROR`；宠物不存在返回 `404 PET_NOT_FOUND`；对象不存在分别返回 `404 RECORD_NOT_FOUND` 或 `404 REMINDER_NOT_FOUND`。错误体遵循本页统一结构，不暴露数据库异常。
-- 列表没有匹配项时返回 `200 []`。`pet_id` 过滤未提供时返回全部宠物及未关联的数据；传 UUID 时只返回该宠物数据；`unlinked=true` 时只返回 `pet_id=null` 的数据，且不得与 `pet_id` 同时提供。时间范围首尾均包含，开始日期晚于结束日期返回 `400 BAD_REQUEST`。
+- 列表没有匹配项时返回 `200 []`。`pet_id` 过滤未提供时返回全部宠物及未关联的数据；传 UUID 时只返回该宠物数据；`unlinked=true` 时只返回 `pet_id=null` 的数据，且不得与 `pet_id` 同时提供。页面查询某只宠物的记录/提醒时必须显式传该宠物的 `pet_id`，不能用未过滤的全量列表替代宠物详情查询；未关联数据作为独立范围展示并标注“未关联宠物”。时间范围首尾均包含，开始日期晚于结束日期返回 `400 BAD_REQUEST`。
 
 ### 日常记录（拟议 `Record`）
 
@@ -162,6 +162,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - `weight_kg` 仅 `weight` 类型必填，使用公斤，数值必须大于 0、最多两位小数、上限 500；其他类型必须为 `null`。不提供可变单位，避免同一字段出现单位换算歧义。
 - 建议端点：`GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}`。列表支持 `pet_id`、`unlinked`、`record_type`、`from_date`、`to_date`；默认按 `occurred_on` 倒序，再按 `created_at` 倒序及 `id` 升序稳定排序。创建返回 `201 Record`，读取/修改返回 `200 Record`，删除返回 `204`。
 - `PATCH` 只修改出现的字段；省略不变，可空字段传 `null` 表示清空。`record_type` 与 `weight_kg` 按完整对象规则联合校验。记录被删除时不删除引用它的提醒，提醒的 `source_record_id` 清空。
+- 若记录被提醒作为 `source_record_id` 引用，`PATCH` 改变记录的 `pet_id` 不自动修改任何提醒；当新归属会使来源记录与提醒的宠物归属不一致时，返回 `409 RECORD_IN_USE`，用户先解除相关提醒的来源引用后再修改归属。`pet_id` 未改变时允许其他字段正常更新。
 
 ### 站内提醒（拟议 `Reminder`）
 
@@ -179,13 +180,13 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 ```
 
 - `title` 必填，去除首尾空格后 1–120 字符；`due_on` 必填，为 `Asia/Shanghai` 日历日期，可为过去日期以支持补录逾期事项。
-- `status` 为 `pending`、`completed`、`cancelled` 之一；新建为 `pending`。完成或取消通过 `PATCH` 更新状态；`overdue`、`today`、`upcoming` 是根据当前日期和 `due_on` 对 `pending` 项计算的展示分组，不是持久化状态。`upcoming` 指明日起至第七日（含）到期。
+- `status` 为 `pending`、`completed`、`cancelled` 之一；新建时客户端不得传 `status`，服务端默认创建为 `pending`。`overdue`、`today`、`upcoming` 是根据当前日期和 `due_on` 对 `pending` 项计算的展示分组，不是持久化状态。`upcoming` 指明日起至第七日（含）到期。
 - `source_record_id` 可空；非空时记录必须存在，且提醒与来源记录的 `pet_id` 必须一致。来源记录删除时仅清空该字段，不删除提醒。
 - 建议端点：`GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}`。列表支持 `pet_id`、`unlinked`、`status`、`from_date`、`to_date`（按 `due_on` 过滤）；默认按 `due_on` 正序、`created_at` 正序及 `id` 升序稳定排序。创建返回 `201 Reminder`，读取/修改返回 `200 Reminder`，删除返回 `204`。
+- 创建仅接受 `pet_id`、`title`、`due_on` 和可选 `source_record_id`；客户端传入 `status` 或任何未知字段均返回 `422 VALIDATION_ERROR`。`PATCH` 仅接受这些可修改字段及 `status`；空对象或包含未知字段返回 `422 VALIDATION_ERROR`。只允许通过 `PATCH status` 将 `pending` 改为 `completed` 或 `cancelled`；对同一状态重复更新幂等成功，不重复产生副作用；两种结束状态不可直接重新打开，需要新建提醒。
 - 提案：只要宠物仍有关联记录或提醒，删除宠物返回既有 `409 PET_IN_USE`，不级联删除或自动解除关联；用户先显式删除/解除关联的记录与提醒，再删除宠物。此沿用 P0 删除错误约定并避免静默丢失历史，需 A/C 确认具体解除关联交互。
-- 提醒状态提案：仅允许 `pending` 转为 `completed` 或 `cancelled`；两种结束状态不可直接重新打开，需要新建提醒。若产品需要撤销完成/取消，应由评审明确状态转换和页面交互后再纳入首版。
 
-**评审需明确回复：**是否接受 `Asia/Shanghai` 日期语义、`weight_kg` 的精度和上限、`name/notes` 字段、过滤与排序、提醒状态转换，以及宠物仍有关联记录/提醒时返回 `PET_IN_USE` 的行为。上述内容未获 A/C 确认前，不据此编写 P1-2/P1-4 的数据库迁移、Schema 或 API 实现。
+**评审需明确回复：**是否接受 `Asia/Shanghai` 日期语义、`weight_kg` 的精度和上限、`name/notes` 字段、过滤与排序、提醒状态转换、`RECORD_IN_USE` 归属变更保护、创建时服务端默认 `pending`、以及宠物仍有关联记录/提醒时返回 `PET_IN_USE` 的行为。上述内容未获 A/C 确认前，不据此编写 P1-2/P1-4 的数据库迁移、Schema 或 API 实现。
 
 ## P1：模型可靠性与数据边界（待契约评审）
 
