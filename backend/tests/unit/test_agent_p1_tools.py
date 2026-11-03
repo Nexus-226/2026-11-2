@@ -100,7 +100,6 @@ def _reminder(**overrides: object) -> ReminderRead:
         "title": "下次驱虫",
         "due_on": date(2026, 11, 9),
         "status": "pending",
-        "due_group": "upcoming",
         "source_record_id": None,
         "created_at": datetime(2026, 11, 2, 8, 0, 0, tzinfo=timezone.utc),
         "updated_at": datetime(2026, 11, 2, 8, 0, 0, tzinfo=timezone.utc),
@@ -156,15 +155,14 @@ def test_list_pet_records_filters_by_type_and_date() -> None:
 def test_list_pet_reminders_expose_due_group() -> None:
     reminders = [
         _reminder(),
-        _reminder(title="洗澡", due_on=date(2026, 11, 2), due_group="today"),
+        _reminder(title="已完成", status="completed"),
     ]
     runtime = _runtime(reminder_service=FakeReminderService(reminders))
-    result = runtime.run_tools(
-        [ToolCallRequest(name="list_pet_reminders", args={"status": "pending"})]
-    )[0]
+    result = runtime.run_tools([ToolCallRequest(name="list_pet_reminders", args={})])[0]
     assert result.status == "success"
-    groups = {r.due_group for r in result.data}
-    assert groups == {"upcoming", "today"}
+    by_status = {r.status: r for r in result.data}
+    assert by_status["pending"].due_group in {"overdue", "today", "upcoming", "later"}
+    assert by_status["completed"].due_group is None
 
 
 def test_list_pet_reminders_empty_returns_empty_list() -> None:

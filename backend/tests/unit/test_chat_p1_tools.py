@@ -71,7 +71,6 @@ def _reminder(**overrides: object) -> ReminderRead:
         "title": "下次驱虫",
         "due_on": date(2026, 11, 9),
         "status": "pending",
-        "due_group": "upcoming",
         "source_record_id": None,
         "created_at": datetime(2026, 11, 2, 8, 0, 0, tzinfo=timezone.utc),
         "updated_at": datetime(2026, 11, 2, 8, 0, 0, tzinfo=timezone.utc),
