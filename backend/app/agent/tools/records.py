@@ -38,7 +38,8 @@ def make_record_tools(
             description=(
                 "查询已经发生的日常记录：vaccine 疫苗、deworming 驱虫、bath 洗澡、"
                 "weight 体重。默认只查当前关联宠物；未关联宠物时先请用户选择。"
-                "用户明确要求汇总所有宠物时才传 all_pets=true。"
+                "用户明确要求汇总所有宠物时才传 all_pets=true，此时返回全部宠物及未关联数据，"
+                "每条结果保留 pet_id 归属。"
                 "体重记录含 weight_kg（单位公斤）。"
                 "无匹配返回空列表；查询失败会返回错误，不要把失败说成没有记录。"
             ),
