@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图尚未实现。实现状态说明不改变以下既有接口契约；新增记录/提醒契约待 P1-1 评审。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图尚未实现。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端由 P1-2 实现，提醒仍待 P1-4。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
 
 ## 共同规则
 
@@ -128,9 +128,9 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 
 B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因此 `get_pet(pet_id)` 和 `list_pets()` 不再额外接收数据库 Session；P0-4 聊天路由应通过 `get_db` 获取 Session，构造适配器后传给 A 的 `run_chat(message, pet_id, service)`。`get_pet` 对不存在的宠物返回 `None`，由 `get_pet_profile` 工具映射为 `PET_NOT_FOUND`；Service 与工具共用 `app.schemas.pet.PetRead`。
 
-## P1-1：日常记录与提醒契约提案（待 A/C 确认）
+## P1-1：日常记录与提醒契约（A/C 已确认）
 
-本节是 P1-1 的接口提案，不是已冻结或已实现的 API。A、C 确认数据字段、日期语义、过滤方式和页面需要后，才能将其作为 P1-2/P1-3/P1-4 的实现契约；若评审有异议，先在本节修订，不兼容地改动既有 P0 接口。
+本节是 P1-1 经 A/C 确认的接口契约；P1-2 实现其中的记录 API，提醒 API 由 P1-4 实现。若后续评审需调整，先在本节修订，不兼容地改动既有 P0 接口。
 
 ### 共同数据规则
 
@@ -161,7 +161,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - `record_type` 必填；`occurred_on` 必填且不得晚于当前 `Asia/Shanghai` 日期。
 - `name` 为可空、去除首尾空格后最长 100 字符的项目/产品名称，可用于疫苗或驱虫记录；`notes` 为可空、最长 2000 字符。
 - `weight_kg` 仅 `weight` 类型必填，使用公斤，数值必须大于 0、最多两位小数、上限 500；其他类型必须为 `null`。不提供可变单位，避免同一字段出现单位换算歧义。
-- 建议端点：`GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}`。列表支持 `pet_id`、`unlinked`、`record_type`、`from_date`、`to_date`；默认按 `occurred_on` 倒序，再按 `created_at` 倒序及 `id` 升序稳定排序。创建返回 `201 Record`，读取/修改返回 `200 Record`，删除返回 `204`。
+- 端点：`GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}`。列表支持 `pet_id`、`unlinked`、`record_type`、`from_date`、`to_date`；默认按 `occurred_on` 倒序，再按 `created_at` 倒序及 `id` 升序稳定排序。创建返回 `201 Record`，读取/修改返回 `200 Record`，删除返回 `204`。
 - 创建仅接受 `pet_id`、`record_type`、`occurred_on`、`name`、`weight_kg`、`notes`；`PATCH` 只修改出现的字段，省略不变，可空字段传 `null` 表示清空。创建或 `PATCH` 包含未知字段，以及空对象 `PATCH`，均返回 `422 VALIDATION_ERROR`。`record_type` 与 `weight_kg` 按更新后的完整对象规则联合校验。记录被删除时不删除引用它的提醒，提醒的 `source_record_id` 清空。
 - 若记录被提醒作为 `source_record_id` 引用，`PATCH` 改变记录的 `pet_id` 不自动修改任何提醒；当新归属会使来源记录与提醒的宠物归属不一致时，返回 `409 RECORD_IN_USE`，用户先解除相关提醒的来源引用后再修改归属。`pet_id` 未改变时允许其他字段正常更新。
 
@@ -189,7 +189,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - 创建仅接受 `pet_id`、`title`、`due_on` 和可选 `source_record_id`；客户端传入 `status` 或任何未知字段均返回 `422 VALIDATION_ERROR`。`PATCH` 仅接受这些可修改字段及 `status`；空对象或包含未知字段返回 `422 VALIDATION_ERROR`。只允许通过 `PATCH status` 将 `pending` 改为 `completed` 或 `cancelled`；对同一状态重复更新幂等成功，不重复产生副作用；两种结束状态不可直接重新打开，需要新建提醒。
 - 提案：只要宠物仍有关联记录或提醒，删除宠物返回既有 `409 PET_IN_USE`，不级联删除或自动解除关联；用户先显式删除/解除关联的记录与提醒，再删除宠物。此沿用 P0 删除错误约定并避免静默丢失历史，需 A/C 确认具体解除关联交互。
 
-**评审需明确回复：**是否接受 `Asia/Shanghai` 日期语义、`weight_kg` 的精度和上限、`name/notes` 字段、过滤与排序、提醒状态转换、`RECORD_IN_USE` 归属变更保护、创建时服务端默认 `pending`、以及宠物仍有关联记录/提醒时返回 `PET_IN_USE` 的行为。上述内容未获 A/C 确认前，不据此编写 P1-2/P1-4 的数据库迁移、Schema 或 API 实现。
+**评审结论：**A/C 已确认 `Asia/Shanghai` 日期语义、`weight_kg` 精度和上限、字段、过滤与排序、提醒状态转换、`RECORD_IN_USE` 归属变更保护、创建时服务端默认 `pending`，以及宠物仍有关联记录/提醒时返回 `PET_IN_USE` 的行为。具体审批记录见 PR #33。
 
 ## P1：模型可靠性与数据边界（待契约评审）
 

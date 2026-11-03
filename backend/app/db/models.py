@@ -1,12 +1,16 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -46,6 +50,43 @@ class Pet(Base):
     species: Mapped[str] = mapped_column(String(10), nullable=False)
     breed: Mapped[str | None] = mapped_column(String(100), nullable=True)
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class Record(Base):
+    __tablename__ = "records"
+    __table_args__ = (
+        CheckConstraint(
+            "record_type IN ('vaccine', 'deworming', 'bath', 'weight')",
+            name="ck_records_record_type",
+        ),
+        CheckConstraint(
+            "(record_type = 'weight' AND weight_kg IS NOT NULL "
+            "AND weight_kg > 0 AND weight_kg <= 500) "
+            "OR (record_type != 'weight' AND weight_kg IS NULL)",
+            name="ck_records_weight_by_type",
+        ),
+        Index("ix_records_user_pet_occurred", "user_id", "pet_id", "occurred_on"),
+        Index("ix_records_user_occurred", "user_id", "occurred_on"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=False
+    )
+    pet_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("pets.id", ondelete="RESTRICT"), nullable=True
+    )
+    record_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    occurred_on: Mapped[date] = mapped_column(Date, nullable=False)
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
