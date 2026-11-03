@@ -207,6 +207,18 @@ def test_list_pet_records_is_bound_to_current_pet() -> None:
     assert [r.pet_id for r in result.data] == [PET_ID]
 
 
+def test_list_pet_reminders_is_bound_to_current_pet() -> None:
+    other_pet = uuid4()
+    reminders = [
+        _reminder(),  # PET_ID
+        _reminder(pet_id=other_pet, title="另一只宠物的提醒"),
+    ]
+    runtime = _runtime(reminder_service=FakeReminderService(reminders))
+    result = runtime.run_tools([ToolCallRequest(name="list_pet_reminders", args={})])[0]
+    assert result.status == "success"
+    assert [r.pet_id for r in result.data] == [PET_ID]
+
+
 def test_from_date_after_to_date_is_validation_error() -> None:
     runtime = _runtime()
     result = runtime.run_tools(
