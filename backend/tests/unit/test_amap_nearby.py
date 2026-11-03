@@ -13,7 +13,13 @@ from sqlalchemy.orm import sessionmaker
 from app.db.session import get_db, init_db
 from app.main import app
 from app.services import nearby_service
-from app.services.amap import AMapClient, gcj02_to_wgs84, wgs84_to_gcj02
+from app.services.amap import (
+    AMapClient,
+    AMapUnavailable,
+    _parse_geocodes,
+    gcj02_to_wgs84,
+    wgs84_to_gcj02,
+)
 
 TEST_KEY = "test-amap-key"
 
@@ -473,3 +479,128 @@ def test_gcj02_conversion_round_trips_in_china() -> None:
 def test_conversion_is_identity_outside_china() -> None:
     assert wgs84_to_gcj02(-33.87, 151.21) == (-33.87, 151.21)
     assert gcj02_to_wgs84(40.7128, -74.006) == (40.7128, -74.006)
+
+
+def geocode_item(
+    formatted_address: str, *, gcj_lat: float, gcj_lng: float
+) -> dict[str, object]:
+    return {"formatted_address": formatted_address, "location": f"{gcj_lng},{gcj_lat}"}
+
+
+def test_parse_geocodes_missing_or_nonarray_raises_unavailable() -> None:
+    """status=1 但 geocodes 缺失/非数组属于上游结构异常（→502），不是无匹配（→404）。"""
+    with pytest.raises(AMapUnavailable):
+        _parse_geocodes({"status": "1", "info": "OK", "infocode": "10000"})
+    with pytest.raises(AMapUnavailable):
+        _parse_geocodes({"status": "1", "geocodes": "nodata"})
+    with pytest.raises(AMapUnavailable):
+        _parse_geocodes({"status": "1", "geocodes": {"0": {}}})
+
+
+def test_parse_geocodes_empty_list_is_no_match() -> None:
+    """合法的空 geocodes 数组表示无匹配，由上层映射 404。"""
+    assert _parse_geocodes({"status": "1", "info": "OK", "geocodes": []}) == []
+
+
+def test_parse_geocodes_filters_nan_inf_and_out_of_range_coordinates() -> None:
+    payload = {
+        "status": "1",
+        "geocodes": [
+            geocode_item("非有限纬度", gcj_lat=float("nan"), gcj_lng=116.4050),
+            geocode_item("非有限经度", gcj_lat=39.9045, gcj_lng=float("inf")),
+            geocode_item("越界纬度", gcj_lat=999.0, gcj_lng=116.4050),
+            geocode_item("越界经度", gcj_lat=39.9045, gcj_lng=-1000.0),
+            geocode_item("北京市朝阳区示例路 18 号", gcj_lat=39.9045, gcj_lng=116.4050),
+        ],
+    }
+    matches = _parse_geocodes(payload)
+    assert [match.formatted_address for match in matches] == [
+        "北京市朝阳区示例路 18 号"
+    ]
+    assert -90.0 <= matches[0].lat <= 90.0
+    assert -180.0 <= matches[0].lng <= 180.0
+
+
+def track_client_close(
+    monkeypatch: pytest.MonkeyPatch, transport: httpx.BaseTransport
+) -> list[bool]:
+    """记录 AMapClient.close 调用；请求路径仍走 nearby_service._amap_client。"""
+    closed: list[bool] = []
+    original_close = AMapClient.close
+
+    def tracking_close(instance: AMapClient) -> None:
+        closed.append(True)
+        original_close(instance)
+
+    monkeypatch.setattr(AMapClient, "close", tracking_close)
+    monkeypatch.setenv("AMAP_WEB_SERVICE_KEY", TEST_KEY)
+    patch_client(monkeypatch, transport)
+    return closed
+
+
+def test_amap_client_closes_after_nearby_success(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closed = track_client_close(
+        monkeypatch,
+        around_transport(
+            [], [poi("B0AAA1", "安心宠物医院", gcj_lat=39.9050, gcj_lng=116.4060)]
+        ),
+    )
+    response = client.get(
+        "/api/v1/nearby",
+        params={"lat": 39.9001, "lng": 116.4001, "type": "pet_hospital"},
+    )
+    assert response.status_code == 200
+    assert response.json()["source"] == "amap"
+    assert closed == [True]
+
+
+def test_amap_client_closes_after_nearby_failure(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closed = track_client_close(
+        monkeypatch,
+        httpx.MockTransport(lambda request: httpx.Response(200, json=failed_body())),
+    )
+    response = client.get(
+        "/api/v1/nearby",
+        params={"lat": 39.9001, "lng": 116.4001, "type": "pet_hospital"},
+    )
+    # 搜索失败按契约回落演示数据并标注来源，但连接池仍须关闭。
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "demo"
+    assert body["fallback_reason"] == "amap_unavailable"
+    assert closed == [True]
+
+
+def test_amap_client_closes_after_detail_success(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closed = track_client_close(
+        monkeypatch,
+        detail_transport(
+            [poi("B0AAA1", "安心宠物医院", gcj_lat=39.9050, gcj_lng=116.4060)]
+        ),
+    )
+    response = client.get(
+        "/api/v1/places/amap:B0AAA1", params={"lat": 39.9001, "lng": 116.4001}
+    )
+    assert response.status_code == 200
+    assert closed == [True]
+
+
+def test_amap_client_closes_after_detail_failure(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closed = track_client_close(
+        monkeypatch,
+        httpx.MockTransport(lambda request: httpx.Response(200, json=failed_body())),
+    )
+    response = client.get(
+        "/api/v1/places/amap:B0AAA1", params={"lat": 39.9001, "lng": 116.4001}
+    )
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "UPSTREAM_ERROR"
+    assert closed == [True]

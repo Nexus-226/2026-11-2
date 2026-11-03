@@ -344,3 +344,151 @@ def test_resolve_never_logs_address_or_key(
     assert response.status_code == 502
     assert "用户的私密地址文本" not in caplog.text
     assert TEST_KEY not in caplog.text
+
+
+def track_client_close(
+    monkeypatch: pytest.MonkeyPatch, transport: httpx.BaseTransport
+) -> list[bool]:
+    """记录 AMapClient.close 调用；请求路径仍走 nearby_service._amap_client。"""
+    closed: list[bool] = []
+    original_close = AMapClient.close
+
+    def tracking_close(instance: AMapClient) -> None:
+        closed.append(True)
+        original_close(instance)
+
+    monkeypatch.setattr(AMapClient, "close", tracking_close)
+    patch_client(monkeypatch, transport)
+    return closed
+
+
+def test_resolve_missing_geocodes_returns_502(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """status=1 但缺失 geocodes 字段是上游结构异常：502，而不是 404。"""
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(
+            requests, {"status": "1", "info": "OK", "infocode": "10000", "count": "0"}
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 502
+    error = response.json()["error"]
+    assert error["code"] == "UPSTREAM_ERROR"
+    assert error["retryable"] is True
+
+
+@pytest.mark.parametrize(
+    "bad_geocodes",
+    ["nodata", {"0": {}}, 3, True],
+)
+def test_resolve_nonarray_geocodes_returns_502(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    bad_geocodes: object,
+) -> None:
+    """geocodes 非数组同样按上游结构异常处理：502。"""
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(
+            requests,
+            {
+                "status": "1",
+                "info": "OK",
+                "infocode": "10000",
+                "geocodes": bad_geocodes,
+            },
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "UPSTREAM_ERROR"
+
+
+def test_resolve_filters_nan_inf_and_out_of_range_candidates(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(
+            requests,
+            ok_body(
+                [
+                    geocode("非有限纬度", gcj_lat=float("nan"), gcj_lng=116.4050),
+                    geocode("非有限经度", gcj_lat=39.9045, gcj_lng=float("inf")),
+                    geocode("越界纬度", gcj_lat=999.0, gcj_lng=116.4050),
+                    geocode("越界经度", gcj_lat=39.9045, gcj_lng=-1000.0),
+                    geocode(
+                        "北京市朝阳区示例路 18 号", gcj_lat=39.9045, gcj_lng=116.4050
+                    ),
+                ]
+            ),
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 200
+    matches = response.json()["matches"]
+    assert [match["formatted_address"] for match in matches] == [
+        "北京市朝阳区示例路 18 号"
+    ]
+    location = matches[0]["location"]
+    assert -90.0 <= location["lat"] <= 90.0
+    assert -180.0 <= location["lng"] <= 180.0
+
+
+def test_resolve_all_candidates_invalid_returns_404(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(
+            requests,
+            ok_body(
+                [
+                    geocode("非有限坐标", gcj_lat=float("nan"), gcj_lng=float("inf")),
+                    geocode("越界坐标", gcj_lat=999.0, gcj_lng=-1000.0),
+                ]
+            ),
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "ADDRESS_NOT_FOUND"
+
+
+def test_amap_client_closes_after_resolve_success(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[httpx.Request] = []
+    closed = track_client_close(
+        monkeypatch,
+        geocode_transport(
+            requests,
+            ok_body(
+                [geocode("北京市朝阳区示例路 18 号", gcj_lat=39.9045, gcj_lng=116.4050)]
+            ),
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 200
+    assert closed == [True]
+
+
+def test_amap_client_closes_after_resolve_failure(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[httpx.Request] = []
+    closed = track_client_close(
+        monkeypatch,
+        geocode_transport(
+            requests, {"status": "0", "info": "INVALID_USER_KEY", "infocode": "10001"}
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 502
+    assert closed == [True]
