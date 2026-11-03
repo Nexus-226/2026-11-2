@@ -6,7 +6,7 @@ import pytest
 from app.agent.errors import ProviderError
 from app.agent.providers.qwen import QwenProvider
 from app.agent.registry import Tool
-from app.agent.schemas import GetPetProfileInput, ToolResult
+from app.agent.schemas import ChatHistoryMessage, GetPetProfileInput, ToolResult
 
 PET_ID = "b8f34f24-f5cf-4b5c-8d40-073541725a11"
 
@@ -80,6 +80,82 @@ def test_qwen_provider_tool_call_then_reply() -> None:
     )
     assert turn2.reply == "已查到豆豆的资料。"
     assert turn2.tool_call is None
+
+
+def test_qwen_provider_includes_history_before_current_message() -> None:
+    captured: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=_reply_response("ok"))
+
+    provider = QwenProvider(
+        api_key="test-key",
+        base_url="https://example.com/compatible-mode/v1",
+        transport=httpx.MockTransport(handler),
+    )
+    provider.next_turn(
+        system_prompt="sys",
+        user_message="刚才那个昵称是什么？",
+        tools=[],
+        tool_results=[],
+        history=[
+            ChatHistoryMessage(role="user", content="我给猫起了个昵称叫小煤球"),
+            ChatHistoryMessage(role="assistant", content="好的，记住了。"),
+        ],
+    )
+
+    messages = captured[0]["messages"]
+    assert [message["role"] for message in messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert messages[1]["content"] == "我给猫起了个昵称叫小煤球"
+    assert messages[3]["content"] == "刚才那个昵称是什么？"
+    assert (
+        sum(1 for message in messages if message["content"] == "刚才那个昵称是什么？")
+        == 1
+    )
+
+
+def test_qwen_provider_applies_history_only_on_first_turn() -> None:
+    captured: list[dict] = []
+    responses = [_tool_call_response(), _reply_response("ok")]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=responses.pop(0))
+
+    provider = QwenProvider(
+        api_key="test-key",
+        base_url="https://example.com/compatible-mode/v1",
+        transport=httpx.MockTransport(handler),
+    )
+    history = [ChatHistoryMessage(role="user", content="上一轮的问题")]
+    tools = [_get_pet_profile_tool()]
+
+    provider.next_turn(
+        system_prompt="sys",
+        user_message="这一轮的问题",
+        tools=tools,
+        tool_results=[],
+        history=history,
+    )
+    provider.next_turn(
+        system_prompt="sys",
+        user_message="这一轮的问题",
+        tools=tools,
+        tool_results=[
+            ToolResult(name="get_pet_profile", status="success", data={"name": "豆豆"})
+        ],
+        history=history,
+    )
+
+    second_messages = captured[1]["messages"]
+    assert sum(1 for m in second_messages if m["content"] == "上一轮的问题") == 1
+    assert sum(1 for m in second_messages if m["content"] == "这一轮的问题") == 1
 
 
 def test_qwen_provider_maps_http_error_to_provider_error() -> None:

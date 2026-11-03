@@ -17,9 +17,12 @@ from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.providers.base import LLMProvider
 from app.agent.providers.factory import build_default_provider
 from app.agent.runtime import MAX_TOOL_CALLS_PER_TURN, AgentRuntime
-from app.agent.schemas import ToolResult
+from app.agent.schemas import ChatHistoryMessage, ToolResult
 from app.agent.service_protocol import PetService
 from app.agent.tools import build_default_registry
+
+MAX_HISTORY_MESSAGES = 20  # 约 10 个完整轮次
+MAX_HISTORY_CHARS = 8000
 
 
 class ToolCallSummary(BaseModel):
@@ -36,6 +39,30 @@ class ChatReply(BaseModel):
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
 
 
+def _select_history(
+    history: list[ChatHistoryMessage] | None,
+) -> list[ChatHistoryMessage]:
+    """取最近若干完整轮次，并限制总字符数；保证历史从用户消息开始。"""
+    messages = [item for item in history or [] if item.content.strip()]
+    if not messages:
+        return []
+
+    messages = messages[-MAX_HISTORY_MESSAGES:]
+
+    selected: list[ChatHistoryMessage] = []
+    total_chars = 0
+    for item in reversed(messages):
+        if selected and total_chars + len(item.content) > MAX_HISTORY_CHARS:
+            break
+        selected.append(item)
+        total_chars += len(item.content)
+    selected.reverse()
+
+    if selected and selected[0].role == "assistant":
+        selected.pop(0)
+    return selected
+
+
 def run_chat(
     message: str,
     pet_id: UUID | None,
@@ -43,11 +70,13 @@ def run_chat(
     *,
     provider: LLMProvider | None = None,
     max_tool_calls: int = MAX_TOOL_CALLS_PER_TURN,
+    history: list[ChatHistoryMessage] | None = None,
 ) -> ChatReply:
     registry = build_default_registry(service)
     runtime = AgentRuntime(registry, max_tool_calls=max_tool_calls)
     provider = provider or build_default_provider()
     tools = [registry.get(name) for name in registry.names()]
+    selected_history = _select_history(history)
 
     system = SYSTEM_PROMPT + f" 今天是 {date.today().isoformat()}。"
     if pet_id is not None:
@@ -63,6 +92,7 @@ def run_chat(
             user_message=message,
             tools=tools,
             tool_results=results,
+            history=selected_history,
         )
         if turn.reply is not None:
             return ChatReply(reply=turn.reply, tool_calls=summaries)

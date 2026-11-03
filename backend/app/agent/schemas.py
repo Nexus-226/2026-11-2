@@ -18,6 +18,13 @@ class ListPetsInput(BaseModel):
     """``list_pets`` 入参（空对象）。"""
 
 
+class ChatHistoryMessage(BaseModel):
+    """一条历史对话消息（P0-8）；只保留对话语义，不重放工具调用。"""
+
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class ToolCallRequest(BaseModel):
     """一次工具调用请求（P0-4 由 LLM 产生，P0-3 由 Runtime 直接驱动）。"""
 

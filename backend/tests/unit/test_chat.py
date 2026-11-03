@@ -1,10 +1,10 @@
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from app.agent.chat import run_chat
+from app.agent.chat import MAX_HISTORY_CHARS, MAX_HISTORY_MESSAGES, run_chat
 from app.agent.providers.base import ProviderTurn
 from app.agent.providers.mock import MockProvider
-from app.agent.schemas import ToolCallRequest
+from app.agent.schemas import ChatHistoryMessage, ToolCallRequest
 from app.schemas.pet import PetRead
 
 PET_ID = UUID("b8f34f24-f5cf-4b5c-8d40-073541725a11")
@@ -104,3 +104,75 @@ def test_run_chat_injects_current_date_into_system_prompt() -> None:
     run_chat("你好", None, FakePetService([]), provider=CapturingProvider())
     assert "今天是" in captured["system_prompt"]
     assert date.today().isoformat() in captured["system_prompt"]
+
+
+class HistoryCapturingProvider:
+    def __init__(self) -> None:
+        self.history: list[ChatHistoryMessage] | None = None
+
+    def next_turn(self, **kwargs: object) -> ProviderTurn:
+        self.history = kwargs.get("history")  # type: ignore[assignment]
+        return ProviderTurn(reply="ok")
+
+
+def test_run_chat_passes_history_to_provider() -> None:
+    provider = HistoryCapturingProvider()
+    history = [
+        ChatHistoryMessage(role="user", content="我给猫起了个昵称叫小煤球"),
+        ChatHistoryMessage(role="assistant", content="好的，记住了。"),
+    ]
+
+    run_chat(
+        "刚才那个昵称是什么？",
+        None,
+        FakePetService([]),
+        provider=provider,
+        history=history,
+    )
+
+    assert provider.history == history
+
+
+def test_run_chat_truncates_history_to_recent_messages() -> None:
+    provider = HistoryCapturingProvider()
+    history: list[ChatHistoryMessage] = []
+    for index in range(30):
+        history.append(ChatHistoryMessage(role="user", content=f"u{index}"))
+        history.append(ChatHistoryMessage(role="assistant", content=f"a{index}"))
+
+    run_chat("继续", None, FakePetService([]), provider=provider, history=history)
+
+    assert provider.history is not None
+    assert len(provider.history) == MAX_HISTORY_MESSAGES
+    assert provider.history[0].role == "user"
+    assert provider.history[-1].content == "a29"
+
+
+def test_run_chat_drops_leading_assistant_from_history() -> None:
+    provider = HistoryCapturingProvider()
+    history = [ChatHistoryMessage(role="assistant", content="orphan")]
+    for index in range(19):
+        role = "user" if index % 2 == 0 else "assistant"
+        history.append(ChatHistoryMessage(role=role, content=f"m{index}"))
+
+    run_chat("继续", None, FakePetService([]), provider=provider, history=history)
+
+    assert provider.history is not None
+    assert provider.history[0].role == "user"
+
+
+def test_run_chat_limits_history_by_characters() -> None:
+    provider = HistoryCapturingProvider()
+    history = [
+        ChatHistoryMessage(role="user", content="u" * 3000),
+        ChatHistoryMessage(role="assistant", content="a" * 3000),
+        ChatHistoryMessage(role="user", content="v" * 3000),
+        ChatHistoryMessage(role="assistant", content="b" * 3000),
+    ]
+
+    run_chat("继续", None, FakePetService([]), provider=provider, history=history)
+
+    assert provider.history is not None
+    assert sum(len(item.content) for item in provider.history) <= MAX_HISTORY_CHARS
+    assert len(provider.history) == 2
+    assert provider.history[0].role == "user"

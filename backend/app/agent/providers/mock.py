@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from app.agent.providers.base import ProviderTurn
 from app.agent.registry import Tool
-from app.agent.schemas import ToolResult
+from app.agent.schemas import ChatHistoryMessage, ToolResult
 
 
 class MockProvider:
@@ -22,6 +22,7 @@ class MockProvider:
         user_message: str,
         tools: list[Tool],
         tool_results: list[ToolResult],
+        history: list[ChatHistoryMessage] | None = None,
     ) -> ProviderTurn:
         if self._index < len(self._turns):
             turn = self._turns[self._index]

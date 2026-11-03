@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from app.agent.errors import ProviderError
 from app.agent.providers.base import ProviderTurn
 from app.agent.registry import Tool
-from app.agent.schemas import ToolCallRequest, ToolResult
+from app.agent.schemas import ChatHistoryMessage, ToolCallRequest, ToolResult
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -65,12 +65,13 @@ class QwenProvider:
         user_message: str,
         tools: list[Tool],
         tool_results: list[ToolResult],
+        history: list[ChatHistoryMessage] | None = None,
     ) -> ProviderTurn:
         if not self._messages:
-            self._messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ]
+            self._messages = [{"role": "system", "content": system_prompt}]
+            for item in history or []:
+                self._messages.append({"role": item.role, "content": item.content})
+            self._messages.append({"role": "user", "content": user_message})
         else:
             result = tool_results[-1]
             self._messages.append(
