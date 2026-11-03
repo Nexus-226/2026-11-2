@@ -96,6 +96,11 @@ def run_chat(
     system = SYSTEM_PROMPT + f" 今天是 {date.today().isoformat()}。"
     if pet_id is not None:
         system += f" 当前关联宠物 pet_id={pet_id}。"
+    else:
+        system += (
+            " 当前未关联任何宠物；用户用“它/这只宠物/当前宠物”指代时，"
+            "先请用户选择宠物，不要用全部宠物列表代替当前宠物。"
+        )
 
     summaries: list[ToolCallSummary] = []
     results: list[ToolResult] = []
