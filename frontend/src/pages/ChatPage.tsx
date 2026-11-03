@@ -157,6 +157,14 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
     );
   }
 
+  function resetSession(notice = "") {
+    setMessages([]);
+    setDraft("");
+    setSessionId(null);
+    setFailedRequest(null);
+    setNotice(notice);
+  }
+
   function startNewSession() {
     if (requestRef.current) return;
     if (
@@ -165,11 +173,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
     ) {
       return;
     }
-    setMessages([]);
-    setDraft("");
-    setSessionId(null);
-    setNotice("");
-    setFailedRequest(null);
+    resetSession();
   }
 
   function changePet(nextPetId: string) {
@@ -177,16 +181,12 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
     if (
       messages.length > 0 &&
       !window.confirm(
-        "切换关联宠物将开始新对话，当前页面的聊天记录将清空。是否继续？",
+        "切换或清空关联宠物将开始新对话，当前页面的聊天记录将清空。是否继续？",
       )
     )
       return;
     setSelectedPetId(nextPetId);
-    setMessages([]);
-    setDraft("");
-    setSessionId(null);
-    setFailedRequest(null);
-    setNotice("关联宠物已变更，已开始新对话。");
+    resetSession("关联宠物已变更，已开始新对话。");
   }
 
   return (
