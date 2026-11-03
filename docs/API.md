@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，模型历史上下文待修复，地图尚未实现。实现状态说明不改变以下既有接口契约；新增记录/提醒契约待 P1-1 评审。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图尚未实现。实现状态说明不改变以下既有接口契约；新增记录/提醒契约待 P1-1 评审。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
 
 ## 共同规则
 
@@ -112,7 +112,7 @@ PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes` 传 `nu
 
 `status` 为 `success` 或 `error`。若无法生成可信回答，返回相应错误状态码，不伪造回复。医疗信息需提醒仅供参考，紧急情况联系兽医。会话及消息持久化由 B 负责；Agent 的工具选择和输出组织由 A 负责；前端显示加载、错误和取消状态由 C 负责。
 
-当前后端路由已接入 A 的 `run_chat`，使用 `BoundPetService` 绑定请求级数据库会话；传入不存在的 `pet_id` 时在调用 Agent 前返回 `404 PET_NOT_FOUND`。会话、用户消息和助手回复持久化到 SQLite。当前已接入 Qwen Provider：配置 LLM_API_KEY 时使用真实模型，否则使用 MockProvider。数据库历史尚未传入模型，修复见 TASKS.md 的 P0-8。
+当前后端路由已接入 A 的 `run_chat`，使用 `BoundPetService` 绑定请求级数据库会话；传入不存在的 `pet_id` 时在调用 Agent 前返回 `404 PET_NOT_FOUND`。会话、用户消息和助手回复持久化到 SQLite。当前已接入 Qwen Provider：配置 LLM_API_KEY 时使用真实模型，否则使用 MockProvider。P0-8 已完成验收：数据库历史已接入模型上下文，切换或清空关联宠物时由页面重置会话；具体实现与验证范围见 TASKS.md。
 
 ## A ↔ B：Agent 内部工具约定
 
