@@ -8,9 +8,10 @@ message_id / 历史持久化由 B 负责。
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime, timedelta
 from typing import Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +20,7 @@ from app.agent.providers.base import LLMProvider
 from app.agent.providers.factory import build_default_provider
 from app.agent.runtime import MAX_TOOL_CALLS_PER_TURN, AgentRuntime
 from app.agent.schemas import ChatHistoryMessage, ToolResult
-from app.agent.service_protocol import PetService
+from app.agent.service_protocol import PetService, RecordService, ReminderService
 from app.agent.tools import build_default_registry
 
 # 最近 10 个完整轮次（20 条消息）；字符数只是保守预算，给系统提示、本次问题、
@@ -83,17 +84,34 @@ def run_chat(
     pet_id: UUID | None,
     service: PetService,
     *,
+    record_service: RecordService | None = None,
+    reminder_service: ReminderService | None = None,
     provider: LLMProvider | None = None,
     max_tool_calls: int = MAX_TOOL_CALLS_PER_TURN,
     history: list[ChatHistoryMessage] | None = None,
 ) -> ChatReply:
-    registry = build_default_registry(service)
+    registry = build_default_registry(
+        service,
+        record_service=record_service,
+        reminder_service=reminder_service,
+        current_pet_id=pet_id,
+    )
     runtime = AgentRuntime(registry, max_tool_calls=max_tool_calls)
     provider = provider or build_default_provider()
     tools = [registry.get(name) for name in registry.names()]
     selected_history = _select_history(history, pet_id)
 
-    system = SYSTEM_PROMPT + f" 今天是 {date.today().isoformat()}。"
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    weekday_names = ["一", "二", "三", "四", "五", "六", "日"]
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    next7_end = today + timedelta(days=6)
+    system = (
+        SYSTEM_PROMPT
+        + f" 今天是 {today.isoformat()}（星期{weekday_names[today.weekday()]}，Asia/Shanghai）。"
+        + f" “未来七天”指 {today.isoformat()} 至 {next7_end.isoformat()}（含今天，共七天）；"
+        + f" “本周”指 {monday.isoformat()}（周一）至 {sunday.isoformat()}（周日）。"
+    )
     if pet_id is not None:
         system += f" 当前关联宠物 pet_id={pet_id}。"
     else:

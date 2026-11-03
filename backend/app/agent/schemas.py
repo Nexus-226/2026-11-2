@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class GetPetProfileInput(BaseModel):
@@ -16,6 +17,44 @@ class GetPetProfileInput(BaseModel):
 
 class ListPetsInput(BaseModel):
     """``list_pets`` 入参（空对象）。"""
+
+
+class ListPetRecordsInput(BaseModel):
+    """``list_pet_records`` 入参；默认查当前关联宠物，all_pets 显式汇总全部宠物。"""
+
+    record_type: Literal["vaccine", "deworming", "bath", "weight"] | None = None
+    from_date: date | None = None
+    to_date: date | None = None
+    all_pets: bool = False
+
+    @model_validator(mode="after")
+    def validate_range(self) -> ListPetRecordsInput:
+        if (
+            self.from_date is not None
+            and self.to_date is not None
+            and self.from_date > self.to_date
+        ):
+            raise ValueError("from_date must not be later than to_date")
+        return self
+
+
+class ListPetRemindersInput(BaseModel):
+    """``list_pet_reminders`` 入参；默认查当前关联宠物，all_pets 显式汇总全部宠物。"""
+
+    status: Literal["pending", "completed", "cancelled"] | None = None
+    from_date: date | None = None
+    to_date: date | None = None
+    all_pets: bool = False
+
+    @model_validator(mode="after")
+    def validate_range(self) -> ListPetRemindersInput:
+        if (
+            self.from_date is not None
+            and self.to_date is not None
+            and self.from_date > self.to_date
+        ):
+            raise ValueError("from_date must not be later than to_date")
+        return self
 
 
 class ChatHistoryMessage(BaseModel):

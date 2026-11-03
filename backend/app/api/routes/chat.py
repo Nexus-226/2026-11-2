@@ -12,6 +12,8 @@ from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services import chat_service
 from app.services.pet_service import BoundPetService
+from app.services.record_service import BoundRecordService
+from app.services.reminder_service import BoundReminderService
 
 router = APIRouter()
 DbSession = Annotated[Session, Depends(get_db)]
@@ -36,6 +38,8 @@ def create_chat(
     request: ChatRequest, session: DbSession, provider: LlmProvider
 ) -> ChatResponse:
     service = BoundPetService(session)
+    record_service = BoundRecordService(session)
+    reminder_service = BoundReminderService(session)
     if request.pet_id is not None and service.get_pet(request.pet_id) is None:
         raise HTTPException(
             status_code=404,
@@ -60,6 +64,8 @@ def create_chat(
                 request.message,
                 request.pet_id,
                 service,
+                record_service=record_service,
+                reminder_service=reminder_service,
                 provider=provider,
                 history=history,
             )
