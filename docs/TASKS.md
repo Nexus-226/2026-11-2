@@ -221,3 +221,9 @@ P0 收尾发现模型在新会话中可能补充未经查询的档案事实（PR
 - A 的 `list_pet_records` 工具与 `RecordService` Protocol 尚未合入仓库，本 PR 只补 B 侧缺口：`app/services/record_service.py` 新增 `BoundRecordService`，与宠物侧 `BoundPetService`（已接入聊天路由）、提醒侧 `BoundReminderService` 同构，构造时绑定请求级 `Session`，`list_records` 支持 `pet_id`、`unlinked`、`record_type`、`from_date`、`to_date` 过滤并返回 `RecordRead`。
 - 空结果返回 `[]`；`pet_id` 不存在时透传 HTTP 层 `PET_NOT_FOUND` 异常，不把失败伪装成空列表，符合 API.md 的 A↔B Service 约定。
 - 测试见 `backend/tests/unit/test_record_service_agent.py`：`RecordRead` 映射、宠物/未关联/类型/日期过滤及 `PET_NOT_FOUND` 透传。适配器在 A 侧工具注册前不接入聊天路由，本 PR 不新增路由、不改前端。
+
+### P1-8 C 侧开发（2026-11-03）
+
+分支 `codex/p1-8-c-page` 实现附近服务导航、API Client、三类地点/半径筛选、来源与回退提示、空结果/失败重试、位置示意图与列表联动。定位失败后保留显式演示区域入口；查询切换忽略迟到响应。当前待验证与 PR #40 后端的真实联调，整体任务不标记完成。未包括手动地址解析、真实地图 SDK、高德接入及 Agent 工具。
+
+验证：前端全部 43 项测试通过（其中附近页面 9 项、Client 2 项），构建及本次修改文件的 Prettier 检查通过。交互测试使用模拟 HTTP/Client 响应，尚未验证真实后端及浏览器视觉表现。
