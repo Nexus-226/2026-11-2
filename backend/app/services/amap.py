@@ -1,9 +1,10 @@
-"""高德 Web 服务（POI 2.0）适配器（P1-9）。
+"""高德 Web 服务适配器（P1-9 POI 2.0；P1-10 地理编码）。
 
 仅本模块直接接触高德的原始请求与响应：请求前把 WGS84 转为 GCJ-02，
 返回的 GCJ-02 坐标转回 WGS84，并把 POI 字段收敛为内部 `AMapPlace`，
-不向 Service、前端或 Agent 暴露厂商原始响应结构或未转换的坐标。密钥
-只参与请求参数，不写入日志或异常消息。
+地理编码候选收敛为 `AMapGeocodeMatch`，不向 Service、前端或 Agent
+暴露厂商原始响应结构或未转换的坐标。密钥只参与请求参数，不写入日志
+或异常消息。
 """
 
 import logging
@@ -49,6 +50,15 @@ class AMapPlace:
     lat: float
     lng: float
     type_name: str
+
+
+@dataclass(frozen=True)
+class AMapGeocodeMatch:
+    """地理编码候选；lat/lng 已转换为 WGS84。"""
+
+    formatted_address: str
+    lat: float
+    lng: float
 
 
 def _in_china_mainland(lat: float, lng: float) -> bool:
@@ -179,6 +189,13 @@ class AMapClient:
             return None
         return pois[0]
 
+    def geocode(self, address: str) -> list[AMapGeocodeMatch]:
+        """结构化地址解析（v3 geocode/geo）：候选坐标已转回 WGS84。"""
+        payload = self._request(
+            "/v3/geocode/geo", {"key": self._api_key, "address": address}
+        )
+        return _parse_geocodes(payload)
+
     def _request(self, path: str, params: dict[str, str]) -> dict[str, object]:
         try:
             response = self._client.get(f"{self._base_url}{path}", params=params)
@@ -210,6 +227,33 @@ class AMapClient:
             )
             raise AMapUnavailable("高德接口返回失败状态")
         return payload
+
+
+def _parse_geocodes(payload: dict[str, object]) -> list[AMapGeocodeMatch]:
+    """解析地理编码候选；无匹配或结构异常时返回空列表，由上层 404。"""
+    geocodes = payload.get("geocodes")
+    if not isinstance(geocodes, list):
+        return []
+    matches: list[AMapGeocodeMatch] = []
+    for item in geocodes:
+        match = _parse_geocode(item)
+        if match is not None:
+            matches.append(match)
+    return matches
+
+
+def _parse_geocode(item: object) -> AMapGeocodeMatch | None:
+    """把单个地理编码候选收敛为内部结构；缺失关键字段时跳过该条。"""
+    if not isinstance(item, dict):
+        return None
+    formatted_address = _clean_text(item.get("formatted_address"))
+    if formatted_address is None:
+        return None
+    gcj_lat, gcj_lng = _parse_gcj02_location(item.get("location"))
+    if gcj_lat is None or gcj_lng is None:
+        return None
+    lat, lng = gcj02_to_wgs84(gcj_lat, gcj_lng)
+    return AMapGeocodeMatch(formatted_address=formatted_address, lat=lat, lng=lng)
 
 
 def _parse_pois(payload: dict[str, object]) -> list[AMapPlace]:

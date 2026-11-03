@@ -8,13 +8,17 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import NearbyPage from "../src/pages/NearbyPage";
-import type { NearbyResponse } from "../src/types/nearby";
+import type { AddressMatch, NearbyResponse } from "../src/types/nearby";
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn(),
   searchDemoRegion: vi.fn(),
+  resolveAddress: vi.fn(),
 }));
-vi.mock("../src/api/nearby", () => ({ nearbyClient: mocks }));
+vi.mock("../src/api/nearby", () => ({
+  nearbyClient: mocks,
+  resolveAddress: mocks.resolveAddress,
+}));
 
 const geo = {
   getCurrentPosition: vi.fn(),
@@ -220,4 +224,138 @@ it("re-queries demo region when switching category", async () => {
       3000,
     ),
   );
+});
+
+function addressMatch(
+  formatted: string,
+  lat: number,
+  lng: number,
+): AddressMatch {
+  return {
+    formatted_address: formatted,
+    location: { lat, lng },
+    data_source: "amap",
+  };
+}
+
+it("resolves typed address and queries nearby after user picks a candidate", async () => {
+  mocks.resolveAddress.mockResolvedValue([
+    addressMatch("北京市朝阳区幸福路 1 号", 39.91, 116.41),
+    addressMatch("北京市海淀区幸福路 1 号", 39.96, 116.31),
+  ]);
+  mocks.search.mockResolvedValue(demoResponse());
+  render(<NearbyPage onNavigate={() => {}} />);
+  fireEvent.change(screen.getByLabelText("地址"), {
+    target: { value: "  幸福路 1 号  " },
+  });
+  fireEvent.click(screen.getByText("解析地址"));
+  await screen.findByText("北京市朝阳区幸福路 1 号");
+  await screen.findByText("北京市海淀区幸福路 1 号");
+  // 候选返回后不自动选择第一条，也不自动查询附近。
+  expect(mocks.search).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("北京市海淀区幸福路 1 号"));
+  await waitFor(() =>
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lat: 39.96,
+        lng: 116.31,
+        center_source: "resolved_address",
+      }),
+    ),
+  );
+  expect(mocks.resolveAddress).toHaveBeenCalledWith("幸福路 1 号");
+});
+
+it("shows address resolve errors without querying nearby", async () => {
+  mocks.resolveAddress.mockRejectedValue(
+    new Error("未找到匹配的地址，请尝试输入更完整的地址"),
+  );
+  render(<NearbyPage onNavigate={() => {}} />);
+  fireEvent.change(screen.getByLabelText("地址"), {
+    target: { value: "不存在的地方" },
+  });
+  fireEvent.click(screen.getByText("解析地址"));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("未找到匹配的地址");
+  expect(mocks.search).not.toHaveBeenCalled();
+});
+
+it("keeps address fallback usable after geolocation denial", async () => {
+  geo.getCurrentPosition.mockImplementation(
+    (_success: unknown, onError: (e: unknown) => void) => {
+      onError(new Error("denied"));
+    },
+  );
+  mocks.resolveAddress.mockResolvedValue([
+    addressMatch("北京市朝阳区幸福路 1 号", 39.91, 116.41),
+  ]);
+  mocks.search.mockResolvedValue(demoResponse());
+  render(<NearbyPage onNavigate={() => {}} />);
+  fireEvent.click(screen.getByText("查找附近的宠物服务"));
+  await screen.findByRole("alert");
+  // 拒绝定位后地址输入仍可用，选择候选即以 resolved_address 查询。
+  fireEvent.change(screen.getByLabelText("地址"), {
+    target: { value: "北京市朝阳区幸福路 1 号" },
+  });
+  fireEvent.click(screen.getByText("解析地址"));
+  const candidate = await screen.findByText("北京市朝阳区幸福路 1 号");
+  fireEvent.click(candidate);
+  await waitFor(() =>
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lat: 39.91,
+        lng: 116.41,
+        center_source: "resolved_address",
+      }),
+    ),
+  );
+});
+
+it("offers user-triggered amap navigation only for real places", async () => {
+  mocks.searchDemoRegion.mockResolvedValue(
+    demoResponse({
+      places: [
+        {
+          id: "demo:pet-hospital-01",
+          name: "演示动物医院（示例）",
+          category: "pet_hospital",
+          address: "示例市演示区和平街 1 号",
+          phone: null,
+          location: { lat: 39.9041, lng: 116.4021 },
+          distance_m: 480,
+          business_status: "unknown",
+          navigation_url: null,
+          data_source: "demo",
+        },
+        {
+          id: "amap:B0REAL1",
+          name: "安心宠物医院",
+          category: "pet_hospital",
+          address: "示例路 18 号",
+          phone: null,
+          location: { lat: 39.913345, lng: 116.384047 },
+          distance_m: 900,
+          business_status: "unknown",
+          navigation_url: null,
+          data_source: "amap",
+        },
+      ],
+    }),
+  );
+  render(<NearbyPage onNavigate={() => {}} />);
+  fireEvent.click(screen.getByText("使用演示区域"));
+  // 地点名称同时出现在列表卡片与地图标记中，因此断言为“至少出现一次”。
+  await screen.findAllByText("安心宠物医院");
+  const nav = screen.getByRole("link", { name: /安心宠物医院的高德导航/ });
+  const href = nav.getAttribute("href");
+  // 导航链接由前端把 WGS84 转为 GCJ-02 后指向高德路径规划页，仅用户点击时打开；
+  // 坐标转换精度由 coords.test.ts 的 eviltransform 向量覆盖。
+  expect(href).toContain("https://uri.amap.com/navigation?to=");
+  expect(href).not.toContain("116.384047");
+  expect(href).not.toContain("39.913345");
+  expect(href).toContain(encodeURIComponent("安心宠物医院"));
+  expect(nav.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(nav.getAttribute("target")).toBe("_blank");
+  // 演示地点是虚构数据，不提供导航入口。
+  expect(screen.queryByRole("link", { name: /演示动物医院/ })).toBeNull();
 });
