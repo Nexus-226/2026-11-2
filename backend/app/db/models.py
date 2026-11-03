@@ -96,6 +96,41 @@ class Record(Base):
     )
 
 
+class Reminder(Base):
+    __tablename__ = "reminders"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'completed', 'cancelled')",
+            name="ck_reminders_status",
+        ),
+        Index("ix_reminders_user_pet_due", "user_id", "pet_id", "due_on"),
+        Index("ix_reminders_user_due", "user_id", "due_on"),
+        Index("ix_reminders_source_record", "source_record_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=False
+    )
+    pet_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("pets.id", ondelete="RESTRICT"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    due_on: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="pending", server_default="pending"
+    )
+    source_record_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("records.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 

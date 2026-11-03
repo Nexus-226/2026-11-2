@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图仅实现演示数据版后端接口（P1-8；前端页面待 C 集成，真实高德接入与 `/locations/resolve` 地址解析待 P1-9/P1-10）。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端由 P1-2 实现，提醒仍待 P1-4。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图仅实现演示数据版后端接口（P1-8；前端页面待 C 集成，真实高德接入与 `/locations/resolve` 地址解析待 P1-9/P1-10）。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端已随 PR #34 合并，提醒后端已随 PR #38 合并（C 提醒页面在 PR #39 评审）。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
 
 ## 共同规则
 
@@ -138,7 +138,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - `created_at`、`updated_at` 为 UTC ISO 8601 时间戳，`id` 为 UUID。业务日期采用 `YYYY-MM-DD` 日历日期，不伪造具体时刻；首版“今天/逾期/未来七天”按 `Asia/Shanghai` 计算。若后续支持多用户或时区设置，再扩展用户时区，不把日期字符串转换成 UTC 时间戳。
 - 所有输入校验失败返回现有 `422 VALIDATION_ERROR`；宠物不存在返回 `404 PET_NOT_FOUND`；对象不存在分别返回 `404 RECORD_NOT_FOUND` 或 `404 REMINDER_NOT_FOUND`。错误体遵循本页统一结构，不暴露数据库异常。
 - 列表没有匹配项时返回 `200 []`。`pet_id` 过滤未提供时返回全部宠物及未关联的数据；传 UUID 时只返回该宠物数据；`unlinked=true` 时只返回 `pet_id=null` 的数据，且不得与 `pet_id` 同时提供。页面查询某只宠物的记录/提醒时必须显式传该宠物的 `pet_id`，不能用未过滤的全量列表替代宠物详情查询；未关联数据作为独立范围展示并标注“未关联宠物”。时间范围首尾均包含，开始日期晚于结束日期返回 `400 BAD_REQUEST`。
-- A↔B Service 约定：记录/提醒查询无匹配数据时返回空列表 `[]`；查询或写入失败时抛出可识别异常，由 HTTP 层映射到本契约对应的错误码（如 `PET_NOT_FOUND`、`RECORD_NOT_FOUND`、`REMINDER_NOT_FOUND`），未预期异常映射为 `500 INTERNAL_ERROR`，不得将失败伪装成空列表。具体异常类型由 A/B 在 Service Protocol 中共享定义；Agent 工具必须保留空结果与异常的区别，以便如实说明“没有记录”或“查询失败”。
+- A↔B Service 约定：记录/提醒查询无匹配数据时返回空列表 `[]`；查询或写入失败时抛出可识别异常，由 HTTP 层映射到本契约对应的错误码（如 `PET_NOT_FOUND`、`RECORD_NOT_FOUND`、`REMINDER_NOT_FOUND`），未预期异常映射为 `500 INTERNAL_ERROR`，不得将失败伪装成空列表。具体异常类型由 A/B 在 Service Protocol 中共享定义；Agent 工具必须保留空结果与异常的区别，以便如实说明“没有记录”或“查询失败”。B 已在 `app.services` 提供构造时绑定 `Session` 的只读适配器并返回对应 `*Read` Schema：`BoundPetService` 已接入 `/api/v1/chat`，`BoundReminderService` 与 `BoundRecordService` 已就绪，待 A 侧工具注册后在 P1-5 联调接入。
 
 ### 日常记录（`Record`）
 
@@ -182,7 +182,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 ```
 
 - `title` 必填，去除首尾空格后 1–120 字符；`due_on` 必填，为 `Asia/Shanghai` 日历日期，可为过去日期以支持补录逾期事项。
-- `status` 为 `pending`、`completed`、`cancelled` 之一；新建时客户端不得传 `status`，服务端默认创建为 `pending`。响应中的 `due_group` 是非持久化派生字段，由 B 的 Service 按 `Asia/Shanghai` 当前日统一计算，供 HTTP 响应和 A 的 Agent 工具共用：`pending` 项按 `due_on` 分为 `overdue`（早于今天）、`today`（今天）、`upcoming`（明日起至第七日，含）或 `later`（第七日之后）；`completed`/`cancelled` 项为 `null`。字段类型为 `ReminderDueGroup = "overdue" | "today" | "upcoming" | "later" | null`。前端和 Agent 不得各自重新计算该分组。`upcoming` 不是持久化状态。
+- `status` 为 `pending`、`completed`、`cancelled` 之一；新建时客户端不得传 `status`，服务端默认创建为 `pending`。响应中的 `due_group` 是非持久化派生字段，由 B 的 Service 按 `Asia/Shanghai` 当前日统一计算，供 HTTP 响应和 A 的 Agent 工具共用：`pending` 项按 `due_on` 分为 `overdue`（逾期）、`today`（今天）、`upcoming`（即将：明日起至第七日，含）或 `later`（更晚：第七日之后）；`completed`/`cancelled` 项为 `null`。字段类型为 `ReminderDueGroup = "overdue" | "today" | "upcoming" | "later" | null`。前端和 Agent 不得各自重新计算该分组。`upcoming` 不是持久化状态。
 - P1-5 演示问法使用“未来七天有哪些安排”，范围为 `Asia/Shanghai` 今天至第六日（含），以查询时实际起止日期回应，包含今天并避免与派生分组 `upcoming`（明日至第七日）混淆。用户问“这周”时按 `Asia/Shanghai` 自然周（周一至周日，含今天）理解；如对话上下文表明用户可能指滚动七天，则先澄清。Service 支持任意包含首尾日期的 `from_date`/`to_date` 查询，不将自然周与滚动七天混为一谈。
 - `source_record_id` 可空；非空时记录必须存在，且提醒与来源记录的 `pet_id` 必须一致；提醒 `PATCH` 后按更新后的完整对象校验此约束，而非只校验本次提交的字段。来源记录删除时仅清空该字段，不删除提醒。
 - 端点：`GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}`。列表支持 `pet_id`、`unlinked`、`status`、`from_date`、`to_date`（按 `due_on` 过滤）；默认按 `due_on` 正序、`created_at` 正序及 `id` 升序稳定排序。创建返回 `201 Reminder`，读取/修改返回 `200 Reminder`，删除返回 `204`。

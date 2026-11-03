@@ -1,13 +1,13 @@
 # Pet Agent
 
-三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），P1-8 演示数据版附近服务后端已在本 PR 实现（页面待 C 集成），提醒、Agent 查询尚未开始；真实高德接入（P1-9）与地址解析未实现，真实 POI 尚未查通。
+三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），记录页面已合并（PR #37）；P1-4 提醒后端已合并（PR #38），C 提醒页面在 PR #39 评审；A 侧 Agent 记录/提醒工具在 PR #42 评审；P1-8 演示数据版附近服务后端已在本 PR 实现（页面待 C 集成）；真实高德接入（P1-9）与地址解析未实现，真实 POI 尚未查通。
 
 ## 目录与分工
 
 ```text
 frontend/                     C：React + TypeScript 前端
   src/app/                    入口与应用
-  src/pages/                  已有对话、宠物资料、日常记录页面；待办/提醒和附近服务页面待实现
+  src/pages/                  已有对话、宠物资料、日常记录页面；待办/提醒页面在 PR #39 评审，附近服务页面待 C 集成
   src/components/             chat / map / common 组件
   src/api/ hooks/ types/ styles/
   tests/
@@ -51,8 +51,9 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | `GET /api/v1/pets`、`POST /api/v1/pets` | 查询列表、新建宠物 | P0，已实现 |
 | `GET /api/v1/pets/{pet_id}`、`PATCH /api/v1/pets/{pet_id}`、`DELETE /api/v1/pets/{pet_id}` | 查看、修改、删除宠物 | P0，已实现 |
 | `POST /api/v1/chat` | Agent 对话，JSON 回复；有 LLM_API_KEY 使用 Qwen，否则使用 MockProvider | P0，路由与会话存储已实现；模型历史上下文待修复 |
-| `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端正在本 PR 提交；前端页面待实现 |
-| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版后端已实现；页面待 C 集成，高德接入待 P1-9 |
+| `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端已随 PR #34 合并；页面已随 PR #37 交付 |
+| `GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}` | 站内提醒和待办查询及 CRUD | P1-4，后端已随 PR #38 合并；C 页面在 PR #39 评审 |
+| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版后端见 [PR #40](https://github.com/Nexus-226/2026-11-2/pull/40)；页面待 C 集成，高德接入待 P1-9 |
 
 宠物字段、记录/提醒错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。记录/提醒契约已由 A/C 确认；其他 P1 接口约定仍需三人评审。实现时如有变更，同步更新文档和测试。
 
