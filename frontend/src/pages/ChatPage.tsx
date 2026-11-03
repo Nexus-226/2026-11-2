@@ -27,6 +27,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
   const [draft, setDraft] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [selectedPetId, setSelectedPetId] = useState("");
+  const selectedPetIdRef = useRef("");
   const [pets, setPets] = useState<Pet[]>([]);
   const [petsLoading, setPetsLoading] = useState(false);
   const [petsError, setPetsError] = useState("");
@@ -43,7 +44,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
   useEffect(() => {
     if (!active) return;
     if (!canSelectPets) {
-      setSelectedPetId("");
+      clearInvalidPet();
       setPets([]);
       setPetsLoading(false);
       setPetsError("");
@@ -57,14 +58,14 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
       .then((items) => {
         if (!current) return;
         setPets(items);
-        setSelectedPetId((previous) =>
-          items.some((item) => item.id === previous) ? previous : "",
-        );
+        if (!items.some((item) => item.id === selectedPetIdRef.current)) {
+          clearInvalidPet();
+        }
       })
       .catch((error: unknown) => {
         if (!current) return;
         setPets([]);
-        setSelectedPetId("");
+        clearInvalidPet();
         setPetsError(messageFromError(error));
       })
       .finally(() => {
@@ -121,7 +122,11 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
         },
       ]);
     } catch (error) {
-      if (controller.signal.reason === "unmount") return;
+      if (
+        requestRef.current !== controller ||
+        controller.signal.reason === "unmount"
+      )
+        return;
       if (controller.signal.aborted) {
         setNotice(
           controller.signal.reason === "timeout"
@@ -133,10 +138,12 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
       }
       setFailedRequest(request);
     } finally {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-      if (requestRef.current === controller) requestRef.current = null;
-      if (controller.signal.reason !== "unmount") setBusy(false);
+      if (requestRef.current === controller) {
+        if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+        requestRef.current = null;
+        if (controller.signal.reason !== "unmount") setBusy(false);
+      }
     }
   }
 
@@ -158,11 +165,23 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
   }
 
   function resetSession(notice = "") {
+    requestRef.current?.abort("session-reset");
+    requestRef.current = null;
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setBusy(false);
     setMessages([]);
     setDraft("");
     setSessionId(null);
     setFailedRequest(null);
     setNotice(notice);
+  }
+
+  function clearInvalidPet() {
+    if (!selectedPetIdRef.current) return;
+    selectedPetIdRef.current = "";
+    setSelectedPetId("");
+    resetSession("关联宠物已失效或暂时无法验证，已清空关联并开始新对话。");
   }
 
   function startNewSession() {
@@ -185,6 +204,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
       )
     )
       return;
+    selectedPetIdRef.current = nextPetId;
     setSelectedPetId(nextPetId);
     resetSession("关联宠物已变更，已开始新对话。");
   }
