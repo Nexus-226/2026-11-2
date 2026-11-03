@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -8,13 +6,6 @@ from sqlalchemy.orm import Session
 
 from app.agent.chat import ChatReply
 from app.db.models import DEFAULT_USER_ID, ChatMessage, ChatSession, utc_now
-
-
-@dataclass(frozen=True)
-class ChatHistoryEntry:
-    role: Literal["user", "assistant"]
-    content: str
-    pet_id: UUID | None
 
 
 class ChatHistoryConflict(Exception):
@@ -30,62 +21,32 @@ def get_chat_session(session: Session, session_id: UUID) -> ChatSession | None:
     )
 
 
-def get_chat_history(
-    session: Session, session_id: str, pet_id: UUID | None
-) -> tuple[list[ChatHistoryEntry], int]:
+def get_recent_chat_messages(
+    session: Session, session_id: str, *, limit: int
+) -> tuple[list[ChatMessage], int]:
+    latest_sequence = (
+        session.scalar(
+            select(func.max(ChatMessage.sequence)).where(
+                ChatMessage.session_id == session_id
+            )
+        )
+        or 0
+    )
+    recent_message_ids = (
+        select(ChatMessage.id)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.sequence.desc())
+        .limit(limit)
+        .subquery()
+    )
     messages = list(
         session.scalars(
             select(ChatMessage)
-            .where(ChatMessage.session_id == session_id)
+            .join(recent_message_ids, ChatMessage.id == recent_message_ids.c.id)
             .order_by(ChatMessage.sequence)
         )
     )
-    last_sequence = messages[-1].sequence if messages else 0
-    requested_pet_id = str(pet_id) if pet_id is not None else None
-    history: list[ChatHistoryEntry] = []
-
-    index = 0
-    while index + 1 < len(messages):
-        user_message = messages[index]
-        assistant_message = messages[index + 1]
-        is_complete_turn = (
-            user_message.history_reliable
-            and assistant_message.history_reliable
-            and user_message.role == "user"
-            and assistant_message.role == "assistant"
-            and assistant_message.sequence == user_message.sequence + 1
-            and user_message.pet_id == assistant_message.pet_id
-        )
-        if not is_complete_turn:
-            index += 1
-            continue
-
-        if user_message.pet_id is None or user_message.pet_id == requested_pet_id:
-            history.extend(
-                [
-                    ChatHistoryEntry(
-                        role="user",
-                        content=user_message.content,
-                        pet_id=(
-                            UUID(user_message.pet_id)
-                            if user_message.pet_id is not None
-                            else None
-                        ),
-                    ),
-                    ChatHistoryEntry(
-                        role="assistant",
-                        content=assistant_message.content,
-                        pet_id=(
-                            UUID(assistant_message.pet_id)
-                            if assistant_message.pet_id is not None
-                            else None
-                        ),
-                    ),
-                ]
-            )
-        index += 2
-
-    return history, last_sequence
+    return messages, latest_sequence
 
 
 def new_chat_session() -> ChatSession:

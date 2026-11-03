@@ -7,7 +7,8 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.agent.chat import ChatReply
+from app.agent.chat import MAX_HISTORY_MESSAGES, ChatReply
+from app.agent.schemas import ChatHistoryMessage
 from app.db.models import ChatMessage, ChatSession
 from app.db.repositories import chats as chat_repository
 
@@ -60,8 +61,48 @@ def get_or_create_chat_session(
 
 def get_chat_history(
     session: Session, chat_session: ChatSession, *, pet_id: UUID | None
-) -> tuple[list[chat_repository.ChatHistoryEntry], int]:
-    return chat_repository.get_chat_history(session, chat_session.id, pet_id)
+) -> tuple[list[ChatHistoryMessage], int]:
+    messages, last_sequence = chat_repository.get_recent_chat_messages(
+        session, chat_session.id, limit=MAX_HISTORY_MESSAGES
+    )
+    requested_pet_id = str(pet_id) if pet_id is not None else None
+    history: list[ChatHistoryMessage] = []
+
+    index = 0
+    while index + 1 < len(messages):
+        user_message = messages[index]
+        assistant_message = messages[index + 1]
+        is_complete_turn = (
+            user_message.history_reliable
+            and assistant_message.history_reliable
+            and user_message.role == "user"
+            and assistant_message.role == "assistant"
+            and assistant_message.sequence == user_message.sequence + 1
+            and user_message.pet_id == assistant_message.pet_id
+        )
+        if not is_complete_turn:
+            index += 1
+            continue
+
+        if user_message.pet_id is None or user_message.pet_id == requested_pet_id:
+            pet_uuid = UUID(user_message.pet_id) if user_message.pet_id else None
+            history.extend(
+                [
+                    ChatHistoryMessage(
+                        role="user",
+                        content=user_message.content,
+                        pet_id=pet_uuid,
+                    ),
+                    ChatHistoryMessage(
+                        role="assistant",
+                        content=assistant_message.content,
+                        pet_id=pet_uuid,
+                    ),
+                ]
+            )
+        index += 2
+
+    return history, last_sequence
 
 
 def save_chat_turn(

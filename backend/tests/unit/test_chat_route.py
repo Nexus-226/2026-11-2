@@ -2,7 +2,6 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,7 +14,7 @@ from app.agent.chat import ChatReply
 from app.agent.chat import run_chat as actual_run_chat
 from app.agent.providers.base import ProviderTurn
 from app.agent.providers.mock import MockProvider
-from app.agent.schemas import ToolCallRequest
+from app.agent.schemas import ChatHistoryMessage, ToolCallRequest
 from app.agent.service_protocol import PetService
 from app.db.models import ChatMessage, ChatSession
 from app.db.session import get_db, init_db
@@ -65,14 +64,14 @@ def test_chat_route_runs_agent_and_persists_turn(
     pet_id = pet_response.json()["id"]
 
     service_instances: list[object] = []
-    received_histories: list[list[object] | None] = []
+    received_histories: list[list[ChatHistoryMessage] | None] = []
 
     def run_with_script(
         message: str,
         requested_pet_id: UUID | None,
         service: PetService,
         provider: object = None,
-        history: list[object] | None = None,
+        history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
         assert message == "豆豆应该怎么护理？"
         assert requested_pet_id == UUID(pet_id)
@@ -163,16 +162,16 @@ def test_chat_route_reuses_existing_session(
     chat_client: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client, _ = chat_client
-    histories: list[list[tuple[str, str]]] = []
+    histories: list[list[ChatHistoryMessage]] = []
 
     def run_with_history(
         message: str,
         requested_pet_id: UUID | None,
         service: PetService,
         provider: object = None,
-        history: list[Any] | None = None,
+        history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
-        histories.append([(item.role, item.content) for item in history or []])
+        histories.append(history or [])
         return ChatReply(reply=f"回复：{message}")
 
     monkeypatch.setattr("app.api.routes.chat.run_chat", run_with_history)
@@ -189,7 +188,13 @@ def test_chat_route_reuses_existing_session(
     second_result = second_response.json()
     assert second_result["session_id"] == first_result["session_id"]
     assert second_result["message_id"] != first_result["message_id"]
-    assert histories == [[], [("user", "你好"), ("assistant", "回复：你好")]]
+    assert histories == [
+        [],
+        [
+            ChatHistoryMessage(role="user", content="你好"),
+            ChatHistoryMessage(role="assistant", content="回复：你好"),
+        ],
+    ]
 
 
 def test_chat_route_filters_history_by_session_and_current_pet(
@@ -203,8 +208,9 @@ def test_chat_route_filters_history_by_session_and_current_pet(
         requested_pet_id: UUID | None,
         service: PetService,
         provider: object = None,
-        history: list[Any] | None = None,
+        history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
+        assert all(isinstance(item, ChatHistoryMessage) for item in history or [])
         histories.append([(item.role, item.content) for item in history or []])
         return ChatReply(reply=f"回复：{message}")
 
@@ -252,7 +258,7 @@ def test_chat_route_returns_conflict_without_saving_stale_turn(
         requested_pet_id: UUID | None,
         service: PetService,
         provider: object = None,
-        history: list[Any] | None = None,
+        history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
         return ChatReply(reply=f"回复：{message}")
 
@@ -295,7 +301,7 @@ def test_chat_route_serializes_same_session_requests(
         requested_pet_id: UUID | None,
         service: PetService,
         provider: object = None,
-        history: list[Any] | None = None,
+        history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
         histories[message] = [(item.role, item.content) for item in history or []]
         if message == "阻塞中的请求":

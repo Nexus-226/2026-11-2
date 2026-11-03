@@ -1,18 +1,19 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.agent.chat import ChatReply
+from app.agent.chat import MAX_HISTORY_MESSAGES, ChatReply
 from app.db.models import Base, ChatMessage, ChatSession
 from app.db.repositories.chats import (
     ChatHistoryConflict,
-    get_chat_history,
+    get_recent_chat_messages,
     new_chat_session,
     save_chat_turn,
 )
+from app.services.chat_service import get_chat_history
 
 
 @pytest.fixture
@@ -166,10 +167,51 @@ def test_history_only_includes_complete_reliable_pet_compatible_turns(
         )
         session.commit()
 
-        history, last_sequence = get_chat_history(session, session_id, pet_id=None)
+        history, last_sequence = get_chat_history(session, chat_session, pet_id=None)
 
     assert [(item.role, item.content) for item in history] == [
         ("user", "general question"),
         ("assistant", "general answer"),
     ]
     assert last_sequence == 5
+
+
+def test_history_query_limits_rows_before_loading(chat_engine) -> None:
+    chat_session = new_chat_session()
+    session_id = chat_session.id
+    with Session(chat_engine, expire_on_commit=False) as session:
+        for index in range(15):
+            _save_turn(
+                session,
+                chat_session,
+                session_id,
+                f"question {index}",
+                f"answer {index}",
+                index * 2,
+            )
+
+    statements: list[str] = []
+
+    def capture_statement(
+        connection, cursor, statement, parameters, context, executemany
+    ) -> None:
+        statements.append(statement)
+
+    event.listen(chat_engine, "before_cursor_execute", capture_statement)
+    try:
+        with Session(chat_engine) as session:
+            messages, last_sequence = get_recent_chat_messages(
+                session, session_id, limit=MAX_HISTORY_MESSAGES
+            )
+    finally:
+        event.remove(chat_engine, "before_cursor_execute", capture_statement)
+
+    history_query = next(
+        statement
+        for statement in statements
+        if "ORDER BY chat_messages.sequence DESC" in statement
+    )
+    assert "LIMIT" in history_query.upper()
+    assert len(messages) == MAX_HISTORY_MESSAGES
+    assert [message.sequence for message in messages] == list(range(11, 31))
+    assert last_sequence == 30

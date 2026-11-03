@@ -7,7 +7,8 @@ from sqlalchemy import URL, create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.repositories.chats import get_chat_history
+from app.db.models import ChatSession
+from app.services.chat_service import get_chat_history
 
 
 def test_migration_backfills_multiple_sessions_and_marks_legacy_unreliable(
@@ -72,7 +73,9 @@ def test_migration_backfills_multiple_sessions_and_marks_legacy_unreliable(
     assert all(not row.history_reliable for row in rows)
     assert constraint_rows == 0
     with Session(engine) as session:
-        history, _ = get_chat_history(session, "session-a", pet_id=None)
+        chat_session = session.get(ChatSession, "session-a")
+        assert chat_session is not None
+        history, _ = get_chat_history(session, chat_session, pet_id=None)
     assert history == []
 
     with pytest.raises(IntegrityError), engine.begin() as connection:

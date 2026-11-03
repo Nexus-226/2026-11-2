@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -7,6 +7,7 @@ from app.agent.chat import run_chat
 from app.agent.errors import ProviderError
 from app.agent.providers.base import LLMProvider
 from app.agent.providers.factory import build_default_provider
+from app.agent.schemas import ChatHistoryMessage
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services import chat_service
@@ -49,10 +50,10 @@ def create_chat(
     session_id = chat_session.id
     session.rollback()
     with chat_service.serialize_chat_session(session_id):
-        history_items, expected_sequence = chat_service.get_chat_history(
+        history: list[ChatHistoryMessage]
+        history, expected_sequence = chat_service.get_chat_history(
             session, chat_session, pet_id=request.pet_id
         )
-        history: list[Any] = history_items
         session.rollback()
         try:
             result = run_chat(
@@ -60,7 +61,7 @@ def create_chat(
                 request.pet_id,
                 service,
                 provider=provider,
-                history=history,  # type: ignore[call-arg]
+                history=history,
             )
         except ProviderError as exc:
             raise HTTPException(
