@@ -94,3 +94,17 @@ def has_reminders_for_pet(session: Session, pet_id: UUID) -> bool:
         )
         is not None
     )
+
+
+def has_reminders_for_source_record(session: Session, record_id: UUID) -> bool:
+    return (
+        session.scalar(
+            select(Reminder.id)
+            .where(
+                Reminder.user_id == DEFAULT_USER_ID,
+                Reminder.source_record_id == str(record_id),
+            )
+            .limit(1)
+        )
+        is not None
+    )
