@@ -10,7 +10,7 @@ from app.db.repositories import pets as pet_repository
 from app.db.repositories import records as record_repository
 from app.db.repositories import reminders as reminder_repository
 from app.db.repositories.pets import get_local_user
-from app.schemas.record import RecordCreate, RecordUpdate
+from app.schemas.record import RecordCreate, RecordRead, RecordUpdate
 
 
 def _not_found(code: str, message: str) -> HTTPException:
@@ -140,3 +140,31 @@ def ensure_pet_can_be_deleted(session: Session, pet_id: UUID) -> None:
                 "retryable": False,
             },
         )
+
+
+class BoundRecordService:
+    """Expose record queries with a database session bound for Agent tools."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def list_records(
+        self,
+        *,
+        pet_id: UUID | None = None,
+        unlinked: bool = False,
+        record_type: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> list[RecordRead]:
+        return [
+            RecordRead.model_validate(record)
+            for record in list_records(
+                self._session,
+                pet_id=pet_id,
+                unlinked=unlinked,
+                record_type=record_type,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        ]
