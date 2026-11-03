@@ -11,6 +11,7 @@ from datetime import date
 from typing import Literal, Protocol
 from uuid import UUID
 
+from app.schemas.nearby import NearbyCategory, NearbyResponse, RequestCenterSource
 from app.schemas.pet import PetRead
 from app.schemas.record import RecordRead
 from app.schemas.reminder import ReminderRead
@@ -55,4 +56,25 @@ class ReminderService(Protocol):
         to_date: date | None = None,
     ) -> list[ReminderRead]:
         """按宠物、状态、时间范围查询提醒；无匹配返回 []，失败抛可识别异常。"""
+        ...
+
+
+class NearbyService(Protocol):
+    """附近服务查询（B 负责实现，P1-8 演示数据版、P1-9 高德接入）。"""
+
+    def search_nearby(
+        self,
+        *,
+        lat: float,
+        lng: float,
+        category: NearbyCategory,
+        radius_m: int,
+        center_source: RequestCenterSource,
+    ) -> NearbyResponse:
+        """按 WGS84 中心、类型、半径查询附近地点。
+
+        ``center_source`` 原样传给附近查询并用于响应 ``search_center.source``；
+        无匹配返回 ``NearbyResponse.places == []``，失败抛可识别异常（如
+        ``UPSTREAM_ERROR``/``UPSTREAM_TIMEOUT``），不把失败伪装成空结果。
+        """
         ...

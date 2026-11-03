@@ -72,6 +72,7 @@ def test_chat_route_runs_agent_and_persists_turn(
         service: PetService,
         record_service: object = None,
         reminder_service: object = None,
+        nearby_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -205,6 +206,36 @@ def test_chat_route_registers_reminder_tool_with_real_service(
     assert result["reply"] == "这周有一次驱虫待办。"
 
 
+def test_chat_route_registers_nearby_tool_with_real_service(
+    chat_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = chat_client
+    from app.api.routes.chat import get_llm_provider
+
+    app.dependency_overrides[get_llm_provider] = lambda: MockProvider(
+        [
+            ProviderTurn(
+                tool_call=ToolCallRequest(
+                    name="search_nearby_pet_services",
+                    args={"lat": 39.9001, "lng": 116.4001, "type": "pet_hospital"},
+                )
+            ),
+            ProviderTurn(reply="附近暂时没有匹配的宠物医院。"),
+        ]
+    )
+
+    response = client.post(
+        "/api/v1/chat",
+        json={"message": "附近有哪些宠物医院？"},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["tool_calls"] == [
+        {"name": "search_nearby_pet_services", "status": "success"}
+    ]
+    assert result["reply"] == "附近暂时没有匹配的宠物医院。"
+
+
 def test_chat_route_returns_pet_not_found_instead_of_internal_error(
     chat_client: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -250,6 +281,7 @@ def test_chat_route_reuses_existing_session(
         service: PetService,
         record_service: object = None,
         reminder_service: object = None,
+        nearby_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -291,6 +323,7 @@ def test_chat_route_filters_history_by_session_and_current_pet(
         service: PetService,
         record_service: object = None,
         reminder_service: object = None,
+        nearby_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -343,6 +376,7 @@ def test_chat_route_returns_conflict_without_saving_stale_turn(
         service: PetService,
         record_service: object = None,
         reminder_service: object = None,
+        nearby_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -388,6 +422,7 @@ def test_chat_route_serializes_same_session_requests(
         service: PetService,
         record_service: object = None,
         reminder_service: object = None,
+        nearby_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
