@@ -327,9 +327,10 @@ def search_nearby(
         # 未配置高德：沿用原查询中心回落演示种子数据。
         return _demo_fallback(search_center, category, radius_m, "amap_not_configured")
     try:
-        pois = _amap_client().search_around(
-            lat=lat, lng=lng, keywords=AMAP_KEYWORDS[category], radius_m=radius_m
-        )
+        with _amap_client() as client:
+            pois = client.search_around(
+                lat=lat, lng=lng, keywords=AMAP_KEYWORDS[category], radius_m=radius_m
+            )
     except (AMapTimeout, AMapUnavailable) as exc:
         # 高德不可用：按契约回落演示数据并标注，不切换查询中心。
         logger.warning("附近查询高德失败，回落演示数据：%s", exc)
@@ -396,7 +397,8 @@ def _amap_place_detail(poi_id: str, query_center: GeoLocation) -> Place:
             },
         )
     try:
-        poi = _amap_client().get_detail(poi_id)
+        with _amap_client() as client:
+            poi = client.get_detail(poi_id)
     except AMapTimeout as exc:
         logger.warning("高德地点详情超时：%s", exc)
         raise HTTPException(

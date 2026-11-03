@@ -421,6 +421,27 @@ def test_place_detail_amap_not_configured(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
 
 
+def test_nearby_skips_pois_with_invalid_coordinates(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_amap_key(monkeypatch)
+    pois = [
+        poi("B0NAN", "坐标异常医院", gcj_lat=float("nan"), gcj_lng=float("nan")),
+        poi("B0INF", "无穷医院", gcj_lat=float("inf"), gcj_lng=float("inf")),
+        poi("B0OOR", "越界医院", gcj_lat=999.0, gcj_lng=999.0),
+        poi("B0OK", "正常医院", gcj_lat=39.9045, gcj_lng=116.4050),
+    ]
+    patch_client(monkeypatch, around_transport([], pois))
+    response = client.get(
+        "/api/v1/nearby",
+        params={"lat": 39.9001, "lng": 116.4001, "type": "pet_hospital"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "amap"
+    assert [place["id"] for place in body["places"]] == ["amap:B0OK"]
+
+
 @pytest.mark.parametrize(
     ("wgs", "gcj"),
     [
