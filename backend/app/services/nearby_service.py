@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 from app.schemas.nearby import (
+    AddressMatch,
+    AddressResolveResponse,
     BusinessStatus,
     FallbackReason,
     GeoLocation,
@@ -327,9 +329,10 @@ def search_nearby(
         # 未配置高德：沿用原查询中心回落演示种子数据。
         return _demo_fallback(search_center, category, radius_m, "amap_not_configured")
     try:
-        pois = _amap_client().search_around(
-            lat=lat, lng=lng, keywords=AMAP_KEYWORDS[category], radius_m=radius_m
-        )
+        with _amap_client() as client:
+            pois = client.search_around(
+                lat=lat, lng=lng, keywords=AMAP_KEYWORDS[category], radius_m=radius_m
+            )
     except (AMapTimeout, AMapUnavailable) as exc:
         # 高德不可用：按契约回落演示数据并标注，不切换查询中心。
         logger.warning("附近查询高德失败，回落演示数据：%s", exc)
@@ -396,7 +399,8 @@ def _amap_place_detail(poi_id: str, query_center: GeoLocation) -> Place:
             },
         )
     try:
-        poi = _amap_client().get_detail(poi_id)
+        with _amap_client() as client:
+            poi = client.get_detail(poi_id)
     except AMapTimeout as exc:
         logger.warning("高德地点详情超时：%s", exc)
         raise HTTPException(
@@ -420,6 +424,67 @@ def _amap_place_detail(poi_id: str, query_center: GeoLocation) -> Place:
     if poi is None:
         raise _place_not_found()
     return _amap_to_place(poi, _category_from_amap_type(poi.type_name), query_center)
+
+
+def resolve_address(address: str) -> AddressResolveResponse:
+    """手动地址解析（P1-10）：地址文本 → WGS84 候选。
+
+    按契约不做演示回退：未配置高德返回 503，上游失败/超时返回
+    502/504，无匹配返回 404；不根据字符串猜测坐标。地址与坐标仅用于
+    本次请求，不写入日志或业务数据库，因此本函数与适配器日志均不含
+    地址内容。
+    """
+    if not _amap_api_key():
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "SERVICE_UNAVAILABLE",
+                "message": "高德服务未配置，暂不能解析地址，可使用演示区域浏览示例数据",
+                "retryable": False,
+            },
+        )
+    try:
+        with _amap_client() as client:
+            matches = client.geocode(address)
+    except AMapTimeout as exc:
+        logger.warning("地址解析高德超时：%s", exc)
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "code": "UPSTREAM_TIMEOUT",
+                "message": "高德服务响应超时",
+                "retryable": True,
+            },
+        ) from exc
+    except AMapUnavailable as exc:
+        logger.warning("地址解析高德失败：%s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "UPSTREAM_ERROR",
+                "message": "高德服务暂时不可用",
+                "retryable": True,
+            },
+        ) from exc
+    if not matches:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "ADDRESS_NOT_FOUND",
+                "message": "未找到匹配的地址，请尝试输入更完整的地址",
+                "retryable": False,
+            },
+        )
+    return AddressResolveResponse(
+        matches=[
+            AddressMatch(
+                formatted_address=match.formatted_address,
+                location=GeoLocation(lat=match.lat, lng=match.lng),
+                data_source="amap",
+            )
+            for match in matches
+        ]
+    )
 
 
 class BoundNearbyService:

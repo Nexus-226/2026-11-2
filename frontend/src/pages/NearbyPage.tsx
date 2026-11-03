@@ -1,11 +1,13 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
-import { nearbyClient } from "../api/nearby";
+import { nearbyClient, resolveAddress } from "../api/nearby";
 import {
+  type AddressMatch,
   type NearbyCategory,
   type NearbyResponse,
   type Place,
 } from "../types/nearby";
+import { wgs84ToGcj02 } from "../lib/coords";
 import "../styles/nearby.css";
 
 const radiusOptions = [
@@ -67,7 +69,18 @@ function sourceBanner(result: NearbyResponse): string {
   return "数据来源：高德（实时）。";
 }
 
-type LoadMode = "locate" | "demo";
+// 后端未提供导航链接时，由前端适配坐标（WGS84 → GCJ-02）后打开高德
+// 路径规划页；坐标适配属于前端调起第三方地图的职责（见 docs/API.md）。
+// 导航链接仅在用户主动点击时打开，不自动跳转；演示地点为虚构数据，
+// 不提供导航入口，避免把虚构位置导航到真实世界。
+function navigationHref(place: Place): string {
+  if (place.navigation_url) return place.navigation_url;
+  const gcj = wgs84ToGcj02(place.location.lat, place.location.lng);
+  const name = encodeURIComponent(place.name);
+  return `https://uri.amap.com/navigation?to=${gcj.lng},${gcj.lat},${name}&mode=car&src=pet-agent&callnative=0`;
+}
+
+type LoadMode = "locate" | "demo" | "address";
 
 interface MapPoint {
   place: Place;
@@ -100,6 +113,7 @@ export default function NearbyPage({
   const modeRef = useRef<LoadMode | null>(null);
   const requestIdRef = useRef(0);
   const centerRef = useRef<{ lat: number; lng: number } | null>(null);
+  const resolvedCenterRef = useRef<{ lat: number; lng: number } | null>(null);
   useEffect(
     () => () => {
       requestIdRef.current += 1;
@@ -141,18 +155,58 @@ export default function NearbyPage({
     }
   }
 
+  async function loadAddress(
+    center: { lat: number; lng: number },
+    type: NearbyCategory,
+    radiusM: number,
+  ) {
+    const requestId = ++requestIdRef.current;
+    modeRef.current = "address";
+    setStarted(true);
+    setLoading(true);
+    setError("");
+    setResult(null);
+    setSelectedId(null);
+    try {
+      const data = await nearbyClient.search({
+        lat: center.lat,
+        lng: center.lng,
+        type,
+        radius_m: radiusM,
+        center_source: "resolved_address",
+      });
+      if (requestIdRef.current !== requestId) return;
+      setResult(data);
+    } catch (e) {
+      if (requestIdRef.current !== requestId) return;
+      setError(msg(e));
+    } finally {
+      if (requestIdRef.current === requestId) setLoading(false);
+    }
+  }
+
+  function reload(type: NearbyCategory, radiusM: number) {
+    const mode = modeRef.current;
+    if (mode === "address") {
+      const center = resolvedCenterRef.current;
+      if (center) void loadAddress(center, type, radiusM);
+      return;
+    }
+    void load(mode ?? "demo", type, radiusM);
+  }
+
   function changeCategory(next: NearbyCategory) {
     setCategory(next);
-    if (modeRef.current) void load(modeRef.current, next, radius);
+    if (modeRef.current) reload(next, radius);
   }
 
   function changeRadius(next: number) {
     setRadius(next);
-    if (modeRef.current) void load(modeRef.current, category, next);
+    if (modeRef.current) reload(category, next);
   }
 
   function retry() {
-    void load(modeRef.current ?? "demo", category, radius);
+    reload(category, radius);
   }
 
   const points = result ? schematicPoints(result) : [];
@@ -223,6 +277,13 @@ export default function NearbyPage({
             </button>
           </p>
         )}
+        <AddressSearch
+          disabled={loading}
+          onSelect={(match) => {
+            resolvedCenterRef.current = match.location;
+            void loadAddress(match.location, category, radius);
+          }}
+        />
         {started && (
           <>
             <div className="nearby-toolbar">
@@ -311,6 +372,94 @@ export default function NearbyPage({
   );
 }
 
+function AddressSearch({
+  disabled,
+  onSelect,
+}: {
+  disabled: boolean;
+  onSelect: (match: AddressMatch) => void;
+}) {
+  const [address, setAddress] = useState("");
+  const [matches, setMatches] = useState<AddressMatch[] | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    const text = address.trim();
+    if (!text || resolving) return;
+    setResolving(true);
+    setError("");
+    setMatches(null);
+    try {
+      const result = await resolveAddress(text);
+      setMatches(result);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  return (
+    <section className="address-search" aria-label="按地址查找">
+      <h2>或者输入地址查找</h2>
+      <p>
+        拒绝定位或不方便使用定位时，可输入地址并从解析候选中选择，再查询附近服务；多条候选由你自行选择，不会自动使用第一条。地址仅用于本次查询，不会保存。
+      </p>
+      <div className="address-form">
+        <label className="address-label" htmlFor="address-input">
+          地址
+        </label>
+        <input
+          id="address-input"
+          className="address-input"
+          value={address}
+          disabled={disabled || resolving}
+          onChange={(e) => setAddress(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+          placeholder="例：北京市朝阳区幸福路 12 号"
+          maxLength={200}
+        />
+        <button
+          type="button"
+          disabled={disabled || resolving || !address.trim()}
+          onClick={() => void submit()}
+        >
+          {resolving ? "解析中…" : "解析地址"}
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {matches && matches.length === 0 && (
+        <p role="status">没有返回候选地址，请尝试输入更完整的地址。</p>
+      )}
+      {matches && matches.length > 0 && (
+        <ul className="address-matches">
+          {matches.map((match, index) => (
+            <li key={`${index}-${match.location.lat}-${match.location.lng}`}>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onSelect(match)}
+              >
+                <strong>{match.formatted_address}</strong>
+                <span>
+                  点击使用该地址查询附近（纬度 {match.location.lat.toFixed(4)}
+                  ，经度 {match.location.lng.toFixed(4)}）
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function PlaceList({
   places,
   selectedId,
@@ -350,6 +499,17 @@ function PlaceList({
               <span>{place.address}</span>
               <span>{place.phone ?? "暂无电话"}</span>
             </button>
+            {place.data_source === "amap" && (
+              <a
+                className="place-nav"
+                href={navigationHref(place)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`在新窗口打开${place.name}的高德导航`}
+              >
+                在高德地图中导航
+              </a>
+            )}
           </li>
         ))}
       </ul>

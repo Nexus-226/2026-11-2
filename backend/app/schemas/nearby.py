@@ -6,7 +6,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 NearbyCategory = Literal["pet_hospital", "pet_grooming", "pet_store"]
 RequestCenterSource = Literal["user_location", "resolved_address"]
@@ -49,3 +49,34 @@ class NearbyResponse(BaseModel):
     search_center: SearchCenter
     source: NearbyDataSource
     fallback_reason: FallbackReason
+
+
+AddressResolveSource = Literal["amap"]
+
+
+class AddressResolveRequest(BaseModel):
+    """手动地址解析请求；契约要求首尾空白去除后长度为 1–200。"""
+
+    address: str
+
+    @field_validator("address")
+    @classmethod
+    def _validate_address(cls, value: str) -> str:
+        text = value.strip()
+        if not 1 <= len(text) <= 200:
+            raise ValueError("地址长度需为 1–200 个字符")
+        return text
+
+
+class AddressMatch(BaseModel):
+    """地址解析候选；按契约仅包含地址文本、WGS84 坐标与数据来源。"""
+
+    formatted_address: str
+    location: GeoLocation
+    data_source: AddressResolveSource
+
+
+class AddressResolveResponse(BaseModel):
+    """地址解析结果；多条候选全部返回，由用户选择，不自动选取。"""
+
+    matches: list[AddressMatch]
