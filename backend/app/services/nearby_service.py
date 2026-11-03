@@ -422,3 +422,24 @@ def _amap_place_detail(poi_id: str, query_center: GeoLocation) -> Place:
     if poi is None:
         raise _place_not_found()
     return _amap_to_place(poi, _category_from_amap_type(poi.type_name), query_center)
+
+
+class BoundNearbyService:
+    """Expose nearby queries for Agent tools (stateless; no database session)."""
+
+    def search_nearby(
+        self,
+        *,
+        lat: float,
+        lng: float,
+        category: NearbyCategory,
+        radius_m: int,
+        center_source: RequestCenterSource,
+    ) -> NearbyResponse:
+        return search_nearby(
+            lat=lat,
+            lng=lng,
+            category=category,
+            radius_m=radius_m,
+            center_source=center_source,
+        )
