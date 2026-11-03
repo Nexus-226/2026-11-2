@@ -134,6 +134,7 @@ def test_run_chat_prompt_distinguishes_name_and_nickname() -> None:
         provider=CapturingProvider(),
     )
     assert "不是用户在会话里临时起的昵称" in captured["system_prompt"]
+    assert "不得额外声称档案名称" in captured["system_prompt"]
 
 
 class HistoryCapturingProvider:
