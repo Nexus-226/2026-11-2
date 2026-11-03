@@ -24,8 +24,12 @@ vi.mock("../src/api/pets", () => ({
   petClient: { list: mocks.pets },
   usingDemoData: false,
 }));
+const recordsFlags = vi.hoisted(() => ({ usingDemoRecords: false }));
 vi.mock("../src/api/records", () => ({
   recordClient: { list: mocks.records },
+  get usingDemoRecords() {
+    return recordsFlags.usingDemoRecords;
+  },
 }));
 const item = {
   id: "r1",
@@ -40,6 +44,7 @@ const item = {
 };
 beforeEach(() => {
   vi.resetAllMocks();
+  recordsFlags.usingDemoRecords = false;
   mocks.pets.mockResolvedValue([{ id: "p", name: "豆豆" }]);
   mocks.records.mockResolvedValue([]);
   mocks.list.mockResolvedValue([]);
@@ -115,4 +120,13 @@ it("shows query failure rather than empty state and can retry", async () => {
   expect(screen.queryByText("当前范围暂无提醒。")).toBeNull();
   fireEvent.click(screen.getByText("重试"));
   await screen.findByText("当前范围暂无提醒。");
+});
+it("hides source record picker when records are demo but reminders use API", async () => {
+  recordsFlags.usingDemoRecords = true;
+  render(<RemindersPage onNavigate={() => {}} />);
+  await screen.findByText("当前范围暂无提醒。");
+  expect(
+    screen.getByText(/来源记录需要设置 VITE_RECORD_DATA_SOURCE=api/),
+  ).toBeTruthy();
+  expect(screen.queryByLabelText("来源记录（可选）")).toBeNull();
 });

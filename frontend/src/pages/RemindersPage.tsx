@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import { petClient, usingDemoData } from "../api/pets";
-import { recordClient } from "../api/records";
+import { recordClient, usingDemoRecords } from "../api/records";
 import { reminderClient, usingDemoReminders } from "../api/reminders";
 import { type PetReminder, type ReminderStatus } from "../types/reminders";
 import {
@@ -47,6 +47,7 @@ export default function RemindersPage({
     [dueOn, setDueOn] = useState(shanghaiToday),
     [sourceRecordId, setSourceRecordId] = useState("");
   const mismatch = !usingDemoReminders && usingDemoData;
+  const recordsMismatch = !usingDemoReminders && usingDemoRecords;
 
   useEffect(() => {
     let live = true;
@@ -289,20 +290,27 @@ export default function RemindersPage({
                     onChange={(e) => setDueOn(e.target.value)}
                   />
                 </label>
-                <label>
-                  来源记录（可选）
-                  <select
-                    value={sourceRecordId}
-                    onChange={(e) => setSourceRecordId(e.target.value)}
-                  >
-                    <option value="">无来源</option>
-                    {records.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {recordLabel(r)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {recordsMismatch ? (
+                  <p>
+                    来源记录需要设置 VITE_RECORD_DATA_SOURCE=api
+                    并重启后才可用；当前无法关联来源记录。
+                  </p>
+                ) : (
+                  <label>
+                    来源记录（可选）
+                    <select
+                      value={sourceRecordId}
+                      onChange={(e) => setSourceRecordId(e.target.value)}
+                    >
+                      <option value="">无来源</option>
+                      {records.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {recordLabel(r)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {recordsError && <p role="alert">{recordsError}</p>}
                 {formError && <p role="alert">{formError}</p>}
                 <button type="submit">{busy ? "处理中…" : "保存提醒"}</button>
