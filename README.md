@@ -37,7 +37,7 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | 后端 | Python + FastAPI + Pydantic | 健康检查、宠物资料 CRUD、统一错误响应、对话路由和会话消息持久化已实现 |
 | Agent | Python Agent 模块、受控工具和 LLM Provider | Runtime、宠物工具、对话编排、Qwen/Mock Provider 已接入；跨请求会话历史传入模型待修复（P0-8） |
 | 数据 | SQLite + SQLAlchemy 2 + Alembic | 本地演示用户与宠物资料通过 SQLite/SQLAlchemy 持久化；Alembic 迁移已配置 |
-| 地图（P1） | 高德开放平台（P1-9）；P1-8 演示版后端内置种子数据无需 Key，页面待 C 集成 | 真实 POI 接入；Key 和配额待准备 |
+| 地图（P1） | 高德开放平台 Web 服务 v5（P1-9 已实现后端真实接入）；P1-8 演示版无需 Key；C 页面已随 PR #43 合并 | 真实 POI 查询、去重、排序与失败回落演示已实现；Key 与配额由部署配置 |
 
 当前真实模型通过 DashScope 的 OpenAI 兼容接口接入，默认 qwen-plus；可通过现有环境变量配置，Provider 抽象保留。前端锁定的依赖版本见 `frontend/package-lock.json`，详细选型和边界见 [技术栈文档](docs/TECH_STACK.md)。
 
@@ -138,11 +138,11 @@ npm run format -- src/app/App.tsx
 
 后端已随 PR #40 合并；前端页面由 C 侧单独集成（页面集成 PR 见 #43，已合并），参考实现保留在分支提交 `465e513`（未运行前端测试与构建，不能据此验收）。后端新增：
 
-- `GET /api/v1/nearby?lat=..&lng=..&type=..&radius_m=..`：高德未接入前按 P1-7 契约回退演示种子数据，返回 `source: "demo"`、`fallback_reason: "amap_not_configured"`，并沿用请求中心计算距离。
+- `GET /api/v1/nearby?lat=..&lng=..&type=..&radius_m=..`：未配置高德时按 P1-7 契约回退演示种子数据，返回 `source: "demo"`、`fallback_reason: "amap_not_configured"`，并沿用请求中心计算距离；配置 Key 后走真实 POI 查询，见下文 P1-9。
 - `GET /api/v1/nearby/demo?type=..&radius_m=..`：用户主动选择的演示区域，使用 `PET_AGENT_DEMO_CENTER_LAT/LNG` 配置的演示中心（未配置时用内置默认值），`search_center.source` 固定为 `demo_region`。
-- `GET /api/v1/places/{place_id}?lat=..&lng=..`：`demo:` 前缀查演示目录；`amap:` 前缀在高德接入前返回 `503 SERVICE_UNAVAILABLE`，不静默替换为演示数据。
+- `GET /api/v1/places/{place_id}?lat=..&lng=..`：`demo:` 前缀查演示目录；`amap:` 前缀只查高德：未配置返回 `503 SERVICE_UNAVAILABLE`、失败/超时返回 502/504、不存在 404，绝不静默替换为演示数据（见下文 P1-9）。
 
-演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层暂依赖调用方校验坐标、类别与半径（HTTP 路由已校验），P1-11 工具直调 Service 前需与 A 明确校验责任。`/locations/resolve` 手动地址解析属 P1-9/P1-10，尚未实现。
+演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层暂依赖调用方校验坐标、类别与半径（HTTP 路由已校验），P1-11 工具直调 Service 前需与 A 明确校验责任。`/locations/resolve` 手动地址解析属 P1-10，尚未实现。
 ## P1-8：附近服务页面（C 侧）
 
 导航“附近服务”通过 FastAPI 的 `/api/v1/nearby` 和 `/api/v1/nearby/demo` 查询三类地点，支持半径筛选、地点列表与位置示意图双向选中。位置示意图不是道路地图，不提供导航。
@@ -150,5 +150,11 @@ npm run format -- src/app/App.tsx
 需启动包含 PR #40 的后端；前端沿用 Vite 的 `VITE_API_PROXY_TARGET` 代理，无需新增数据模式开关。页面不会自动定位或自动进入演示区域，用户拒绝定位后仍可点击“使用演示区域”。接口错误明确展示，不在前端伪造演示结果。地点与查询中心来源、回退原因及空结果按后端响应展示；定位仅保存在当前页面内存。
 
 手动地址解析、真实地图 SDK、高德接入及 Agent 附近查询不在本次页面范围。P1-8 真实联调已由用户确认通过（2026-11-03），PR #40 已合并，C 页面 PR #43 已合并。
+
+## P1-9：高德真实接入（B 侧实现）
+
+配置 `AMAP_WEB_SERVICE_KEY`（高德 Web 服务 Key）后，`/api/v1/nearby` 通过高德 POI 2.0（v5 `place/around`）查询真实地点：按类别使用关键字召回（宠物医院/动物医院、宠物美容/SPA/洗护、宠物用品/宠物店），请求前把 WGS84 转为 GCJ-02，返回坐标转回 WGS84；坐标转换收敛在后端 `app/services/amap.py`，不透出高德原始响应或未转换坐标。距离仍由服务端按 WGS84 球面距离计算并过滤半径，结果按 `(distance_m, id)` 稳定排序并按高德地点 ID 去重；`category` 由高德类型文本映射，`business_status` 固定 `unknown`（高德无可靠营业状态），`phone` 取自高德 `business.tel`，`navigation_url` 保持 `null`。高德正常返回空列表时 `source: "amap"`、`places: []`，不算失败。
+
+高德未配置或调用失败时按 P1-7 契约回落演示种子数据并标注来源：未配置为 `fallback_reason: "amap_not_configured"`，超时/失败为 `fallback_reason: "amap_unavailable"`；回落沿用原查询中心与 `search_center`，不切换演示中心。`GET /api/v1/places/amap:<id>` 走 v5 `place/detail`：未配置 503、上游失败 502、超时 504、不存在 404，绝不静默替换为演示数据。密钥仅由后端读取，不写入日志或错误响应。相关测试（25 项）全部使用 httpx MockTransport 模拟高德响应，不依赖真实 Key 或配额；坐标转换以 eviltransform 公开测试向量校验。
 
 
