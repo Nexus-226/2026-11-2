@@ -321,3 +321,131 @@ def test_record_pet_patch_can_clear_or_change_association(client: TestClient) ->
     )
     assert invalid_association.status_code == 404
     assert invalid_association.json()["error"]["code"] == "PET_NOT_FOUND"
+
+
+def create_source_reminder(
+    client: TestClient,
+    pet_id: str,
+    record_id: str,
+    due_on: str = "2026-11-02",
+    title: str = "来源记录提醒",
+) -> str:
+    response = client.post(
+        "/api/v1/reminders",
+        json={
+            "pet_id": pet_id,
+            "title": title,
+            "due_on": due_on,
+            "source_record_id": record_id,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def test_record_pet_change_blocked_while_referenced_by_reminder(
+    client: TestClient,
+) -> None:
+    pet_one = create_pet(client, "豆豆")
+    pet_two = create_pet(client, "团团")
+    created = client.post(
+        "/api/v1/records",
+        json={
+            "pet_id": pet_one,
+            "record_type": "bath",
+            "occurred_on": "2026-11-02",
+            "name": "洗澡",
+        },
+    )
+    assert created.status_code == 201
+    record_id = created.json()["id"]
+    create_source_reminder(client, pet_one, record_id)
+
+    blocked = client.patch(
+        f"/api/v1/records/{record_id}",
+        json={"pet_id": pet_two, "name": "改名"},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "RECORD_IN_USE"
+
+    unchanged = client.get(f"/api/v1/records/{record_id}")
+    assert unchanged.status_code == 200
+    assert unchanged.json()["pet_id"] == pet_one
+    assert unchanged.json()["name"] == "洗澡"
+
+    blocked_unlink = client.patch(
+        f"/api/v1/records/{record_id}",
+        json={"pet_id": None},
+    )
+    assert blocked_unlink.status_code == 409
+    assert blocked_unlink.json()["error"]["code"] == "RECORD_IN_USE"
+
+
+def test_record_updates_allowed_when_pet_id_not_changed(client: TestClient) -> None:
+    pet_one = create_pet(client, "豆豆")
+    created = client.post(
+        "/api/v1/records",
+        json={
+            "pet_id": pet_one,
+            "record_type": "weight",
+            "occurred_on": "2026-11-02",
+            "weight_kg": 4.25,
+        },
+    )
+    assert created.status_code == 201
+    record_id = created.json()["id"]
+    create_source_reminder(client, pet_one, record_id)
+
+    rename = client.patch(
+        f"/api/v1/records/{record_id}",
+        json={"name": "体重复查", "weight_kg": 4.5},
+    )
+    assert rename.status_code == 200
+    assert rename.json()["name"] == "体重复查"
+    assert rename.json()["weight_kg"] == 4.5
+    assert rename.json()["pet_id"] == pet_one
+
+    same_pet = client.patch(
+        f"/api/v1/records/{record_id}",
+        json={"pet_id": pet_one, "notes": "同宠物更新"},
+    )
+    assert same_pet.status_code == 200
+    assert same_pet.json()["pet_id"] == pet_one
+    assert same_pet.json()["notes"] == "同宠物更新"
+
+
+def test_record_pet_change_allowed_after_reference_cleared(client: TestClient) -> None:
+    pet_one = create_pet(client, "豆豆")
+    pet_two = create_pet(client, "团团")
+    created = client.post(
+        "/api/v1/records",
+        json={"pet_id": pet_one, "record_type": "bath", "occurred_on": "2026-11-02"},
+    )
+    assert created.status_code == 201
+    record_id = created.json()["id"]
+    reminder_id = create_source_reminder(client, pet_one, record_id)
+
+    blocked = client.patch(
+        f"/api/v1/records/{record_id}",
+        json={"pet_id": pet_two},
+    )
+    assert blocked.status_code == 409
+
+    cleared = client.patch(
+        f"/api/v1/reminders/{reminder_id}",
+        json={"source_record_id": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["source_record_id"] is None
+
+    moved = client.patch(
+        f"/api/v1/records/{record_id}",
+        json={"pet_id": pet_two},
+    )
+    assert moved.status_code == 200
+    assert moved.json()["pet_id"] == pet_two
+
+    reminder_after = client.get(f"/api/v1/reminders/{reminder_id}")
+    assert reminder_after.status_code == 200
+    assert reminder_after.json()["pet_id"] == pet_one
+    assert reminder_after.json()["source_record_id"] is None
