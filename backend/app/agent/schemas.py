@@ -57,6 +57,16 @@ class ListPetRemindersInput(BaseModel):
         return self
 
 
+class SearchNearbyPetServicesInput(BaseModel):
+    """``search_nearby_pet_services`` 入参；坐标为 WGS84 十进制度数。"""
+
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    type: Literal["pet_hospital", "pet_grooming", "pet_store"]
+    radius_m: int = Field(default=3000, ge=1000, le=20000)
+    center_source: Literal["user_location", "resolved_address"] = "user_location"
+
+
 class ChatHistoryMessage(BaseModel):
     """一条历史对话消息（P0-8）；只保留对话语义，不重放工具调用。
 

@@ -482,3 +482,24 @@ def resolve_address(address: str) -> AddressResolveResponse:
             for match in matches
         ]
     )
+
+
+class BoundNearbyService:
+    """Expose nearby queries for Agent tools (stateless; no database session)."""
+
+    def search_nearby(
+        self,
+        *,
+        lat: float,
+        lng: float,
+        category: NearbyCategory,
+        radius_m: int,
+        center_source: RequestCenterSource,
+    ) -> NearbyResponse:
+        return search_nearby(
+            lat=lat,
+            lng=lng,
+            category=category,
+            radius_m=radius_m,
+            center_source=center_source,
+        )
