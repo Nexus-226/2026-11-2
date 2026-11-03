@@ -48,13 +48,13 @@ def _select_history(
 ) -> list[ChatHistoryMessage]:
     """取最近若干完整轮次，并限制总字符数；不保留半轮消息。
 
-    当前请求关联了宠物时，丢弃属于其他宠物的历史，避免旧宠物事实混入本轮。
+    只保留通用消息（pet_id 为 None）或与当前请求关联宠物一致的历史；未关联宠物
+    时不从历史恢复旧宠物上下文，避免旧宠物事实混入本轮。
     """
     messages = [
         item
         for item in history or []
-        if item.content.strip()
-        and (pet_id is None or item.pet_id is None or item.pet_id == pet_id)
+        if item.content.strip() and (item.pet_id is None or item.pet_id == pet_id)
     ]
     if not messages:
         return []

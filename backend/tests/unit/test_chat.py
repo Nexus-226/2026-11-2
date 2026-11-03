@@ -221,17 +221,22 @@ def test_run_chat_filters_history_from_other_pets() -> None:
     assert [item.content for item in provider.history] == ["豆豆的问题", "豆豆的回答"]
 
 
-def test_run_chat_keeps_history_when_no_current_pet() -> None:
+def test_run_chat_drops_pet_history_when_no_current_pet() -> None:
     provider = HistoryCapturingProvider()
     history = [
         ChatHistoryMessage(role="user", content="豆豆的问题", pet_id=PET_ID),
         ChatHistoryMessage(role="assistant", content="豆豆的回答", pet_id=PET_ID),
+        ChatHistoryMessage(role="user", content="不关联宠物的问题"),
+        ChatHistoryMessage(role="assistant", content="不关联宠物的回答"),
     ]
 
     run_chat("继续", None, FakePetService([_pet()]), provider=provider, history=history)
 
     assert provider.history is not None
-    assert len(provider.history) == 2
+    assert [item.content for item in provider.history] == [
+        "不关联宠物的问题",
+        "不关联宠物的回答",
+    ]
 
 
 def test_run_chat_drops_over_budget_single_round() -> None:
