@@ -118,4 +118,4 @@ npm run format -- src/app/App.tsx
 
 `.gitattributes` 让 Git 新检出或重新写入的文本文件使用 LF，即使本机设置了 `core.autocrlf=true`；已有工作区文件不会立即自动转换。请先保存本地改动，再按需用编辑器或对应格式化工具转换涉及的文件。
 
-应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。当前优先完成 P0 联调验收和上下文修复，再推进 P1 记录、提醒与 Agent 查询；附近地点和地图随后实施。新增功能尚无已实现接口，其契约由 P1-7 另行确认，不在本说明中预设。
+应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。当前优先完成 P0 联调验收和上下文修复，再推进 P1 记录、提醒与 Agent 查询；附近地点和地图随后实施。新增功能尚无已实现接口，其契约由 P1-1 另行确认，不在本说明中预设。
