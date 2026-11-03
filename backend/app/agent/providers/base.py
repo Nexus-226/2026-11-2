@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.agent.registry import Tool
-from app.agent.schemas import ToolCallRequest, ToolResult
+from app.agent.schemas import ChatHistoryMessage, ToolCallRequest, ToolResult
 
 
 @dataclass
@@ -31,4 +31,7 @@ class LLMProvider(Protocol):
         user_message: str,
         tools: list[Tool],
         tool_results: list[ToolResult],
-    ) -> ProviderTurn: ...
+        history: list[ChatHistoryMessage] | None = None,
+    ) -> ProviderTurn:
+        """返回下一步；``history`` 只在首轮用于重建上下文，后续轮次忽略。"""
+        ...
