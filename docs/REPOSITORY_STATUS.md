@@ -17,4 +17,6 @@
 
 宠物 CRUD、SQLite Alembic 迁移、验证错误、会话消息持久化及 Qwen/Mock Provider 已实现；P0 仍需上下文修复和完整验收。取消/超时等路径按共同验收清单确认，不因真实模型接入而自动视为通过。指南中的 Docker Compose 标注为可选，目前未配置。
 
+会话上下文目标数据流见 [技术栈与架构说明](TECH_STACK.md#会话上下文与宠物事实的数据流)，具体实施和验收见 [任务表 P0-8](TASKS.md)。数据库历史读取、sequence 迁移、上下文回放及整轮保存规则属于待实施要求；不能把已保存聊天记录描述成模型已具有跨请求记忆。
+
 宠物资料的 `birthday`、`notes` 字段已决定；其他接口和技术选型见 [API.md](API.md) 与 [TECH_STACK.md](TECH_STACK.md)，仍需三人评审确认。
