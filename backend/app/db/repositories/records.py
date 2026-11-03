@@ -2,10 +2,10 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.db.models import DEFAULT_USER_ID, Record
+from app.db.models import DEFAULT_USER_ID, Record, Reminder
 
 
 def list_records(
@@ -82,6 +82,14 @@ def update_record(
 
 
 def delete_record(session: Session, record: Record) -> None:
+    session.execute(
+        update(Reminder)
+        .where(
+            Reminder.user_id == record.user_id,
+            Reminder.source_record_id == record.id,
+        )
+        .values(source_record_id=None)
+    )
     session.delete(record)
     session.commit()
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Record
 from app.db.repositories import pets as pet_repository
 from app.db.repositories import records as record_repository
+from app.db.repositories import reminders as reminder_repository
 from app.db.repositories.pets import get_local_user
 from app.schemas.record import RecordCreate, RecordUpdate
 
@@ -98,6 +99,18 @@ def update_record(session: Session, record_id: UUID, values: RecordUpdate) -> Re
             raise _not_found("PET_NOT_FOUND", "未找到宠物")
     else:
         pet_id = None
+
+    if pet_id != record.pet_id and reminder_repository.has_reminders_for_source_record(
+        session, record_id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "RECORD_IN_USE",
+                "message": "记录仍被提醒作为来源引用，请先解除提醒的来源引用再修改宠物归属",
+                "retryable": False,
+            },
+        )
 
     return record_repository.update_record(
         session,
