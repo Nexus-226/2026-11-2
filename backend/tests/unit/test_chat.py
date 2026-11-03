@@ -111,7 +111,8 @@ class HistoryCapturingProvider:
         self.history: list[ChatHistoryMessage] | None = None
 
     def next_turn(self, **kwargs: object) -> ProviderTurn:
-        self.history = kwargs.get("history")  # type: ignore[assignment]
+        value = kwargs.get("history")
+        self.history = value if isinstance(value, list) else None
         return ProviderTurn(reply="ok")
 
 
@@ -159,6 +160,69 @@ def test_run_chat_drops_leading_assistant_from_history() -> None:
 
     assert provider.history is not None
     assert provider.history[0].role == "user"
+
+
+def test_run_chat_drops_trailing_half_round_from_history() -> None:
+    provider = HistoryCapturingProvider()
+    history = [
+        ChatHistoryMessage(role="user", content="u1"),
+        ChatHistoryMessage(role="assistant", content="a1"),
+        ChatHistoryMessage(role="user", content="没有回复的半轮"),
+    ]
+
+    run_chat("继续", None, FakePetService([]), provider=provider, history=history)
+
+    assert provider.history is not None
+    assert [item.content for item in provider.history] == ["u1", "a1"]
+
+
+def test_run_chat_passes_history_only_on_first_turn() -> None:
+    class TwoTurnProvider:
+        def __init__(self) -> None:
+            self.history_per_call: list[object] = []
+
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            self.history_per_call.append(kwargs.get("history"))
+            if len(self.history_per_call) == 1:
+                return ProviderTurn(
+                    tool_call=ToolCallRequest(name="list_pets", args={})
+                )
+            return ProviderTurn(reply="完成")
+
+    provider = TwoTurnProvider()
+    history = [
+        ChatHistoryMessage(role="user", content="上一轮"),
+        ChatHistoryMessage(role="assistant", content="上一轮的回答"),
+    ]
+
+    run_chat("继续", None, FakePetService([]), provider=provider, history=history)
+
+    assert provider.history_per_call[0] == history
+    assert provider.history_per_call[1] is None
+
+
+def test_run_chat_drops_over_budget_single_round() -> None:
+    provider = HistoryCapturingProvider()
+    history = [
+        ChatHistoryMessage(role="user", content="u" * (MAX_HISTORY_CHARS + 1)),
+        ChatHistoryMessage(role="assistant", content="a"),
+    ]
+
+    run_chat("继续", None, FakePetService([]), provider=provider, history=history)
+
+    assert provider.history == []
+
+
+def test_run_chat_ignores_blank_history_messages() -> None:
+    provider = HistoryCapturingProvider()
+    history = [
+        ChatHistoryMessage(role="user", content="   "),
+        ChatHistoryMessage(role="assistant", content=""),
+    ]
+
+    run_chat("继续", None, FakePetService([]), provider=provider, history=history)
+
+    assert provider.history == []
 
 
 def test_run_chat_limits_history_by_characters() -> None:

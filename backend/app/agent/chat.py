@@ -1,8 +1,9 @@
 """Agent 对话编排（A 负责）。
 
-``run_chat`` 是给 B 的 ``/api/v1/chat`` 路由调用的入口：B 传入 message、pet_id 和
-绑定好 DB session 的 PetService，这里驱动 LLM Provider → 工具调用 → 结果回填 →
-最终回复，返回 reply 和 tool_calls。session_id / message_id 由 B 负责补充。
+``run_chat`` 是给 B 的 ``/api/v1/chat`` 路由调用的入口：B 传入 message、pet_id、
+绑定好 DB session 的 PetService，以及按会话读取的历史消息；这里驱动 LLM Provider
+→ 工具调用 → 结果回填 → 最终回复，返回 reply 和 tool_calls。session_id /
+message_id / 历史持久化由 B 负责。
 """
 
 from __future__ import annotations
@@ -21,7 +22,9 @@ from app.agent.schemas import ChatHistoryMessage, ToolResult
 from app.agent.service_protocol import PetService
 from app.agent.tools import build_default_registry
 
-MAX_HISTORY_MESSAGES = 20  # 约 10 个完整轮次
+# 最近 10 个完整轮次（20 条消息）；字符数只是保守预算，给系统提示、本次问题、
+# 工具定义、当前工具结果和输出预留空间，不视为精确 token 计数。
+MAX_HISTORY_MESSAGES = 20
 MAX_HISTORY_CHARS = 8000
 
 
@@ -42,7 +45,7 @@ class ChatReply(BaseModel):
 def _select_history(
     history: list[ChatHistoryMessage] | None,
 ) -> list[ChatHistoryMessage]:
-    """取最近若干完整轮次，并限制总字符数；保证历史从用户消息开始。"""
+    """取最近若干完整轮次，并限制总字符数；不保留半轮消息。"""
     messages = [item for item in history or [] if item.content.strip()]
     if not messages:
         return []
@@ -58,8 +61,11 @@ def _select_history(
         total_chars += len(item.content)
     selected.reverse()
 
-    if selected and selected[0].role == "assistant":
+    # 只保留完整轮次：去掉开头孤立的 assistant 和结尾没有回复的 user。
+    while selected and selected[0].role == "assistant":
         selected.pop(0)
+    while selected and selected[-1].role == "user":
+        selected.pop()
     return selected
 
 
@@ -92,7 +98,8 @@ def run_chat(
             user_message=message,
             tools=tools,
             tool_results=results,
-            history=selected_history,
+            # 只在首轮拼接历史；同次请求的工具循环继续追加调用与结果。
+            history=selected_history if tool_call_count == 0 else None,
         )
         if turn.reply is not None:
             return ChatReply(reply=turn.reply, tool_calls=summaries)
