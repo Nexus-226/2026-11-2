@@ -24,3 +24,8 @@ frontend/coverage/
 *.egg-info/
 .mypy_cache/
 .ruff_cache/
+
+# 本地工作树、同步备份与误入副本（不提交）
+.worktrees/
+.sync-backup-*/
+frontend/pet-agent-backend/

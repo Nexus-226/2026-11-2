@@ -120,3 +120,9 @@ npm run format -- src/app/App.tsx
 `.gitattributes` 让 Git 新检出或重新写入的文本文件使用 LF，即使本机设置了 `core.autocrlf=true`；已有工作区文件不会立即自动转换。请先保存本地改动，再按需用编辑器或对应格式化工具转换涉及的文件。
 
 应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。当前优先完成 P0 联调验收和上下文修复，再推进 P1 记录、提醒与 Agent 查询；附近地点和地图随后实施。新增功能尚无已实现接口，其契约由 P1-1 另行确认，不在本说明中预设。
+
+## P1-3：日常记录页面（C 侧开发）
+
+导航“日常记录”支持疫苗、驱虫、洗澡、体重记录的添加、编辑、确认删除及日期倒序时间线，可按宠物、类型和日期范围筛选。默认是浏览器本地演示数据，与后端数据分开。
+
+设置 `VITE_RECORD_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/records`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地记录。真实后端联调依赖 B 的 P1-2；当前不包含提醒创建或 Agent 记录查询。
