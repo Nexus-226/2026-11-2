@@ -138,7 +138,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - `created_at`、`updated_at` 为 UTC ISO 8601 时间戳，`id` 为 UUID。业务日期采用 `YYYY-MM-DD` 日历日期，不伪造具体时刻；首版“今天/逾期/未来七天”按 `Asia/Shanghai` 计算。若后续支持多用户或时区设置，再扩展用户时区，不把日期字符串转换成 UTC 时间戳。
 - 所有输入校验失败返回现有 `422 VALIDATION_ERROR`；宠物不存在返回 `404 PET_NOT_FOUND`；对象不存在分别返回 `404 RECORD_NOT_FOUND` 或 `404 REMINDER_NOT_FOUND`。错误体遵循本页统一结构，不暴露数据库异常。
 - 列表没有匹配项时返回 `200 []`。`pet_id` 过滤未提供时返回全部宠物及未关联的数据；传 UUID 时只返回该宠物数据；`unlinked=true` 时只返回 `pet_id=null` 的数据，且不得与 `pet_id` 同时提供。页面查询某只宠物的记录/提醒时必须显式传该宠物的 `pet_id`，不能用未过滤的全量列表替代宠物详情查询；未关联数据作为独立范围展示并标注“未关联宠物”。时间范围首尾均包含，开始日期晚于结束日期返回 `400 BAD_REQUEST`。
-- A↔B Service 约定：记录/提醒查询无匹配数据时返回空列表 `[]`；查询或写入失败时抛出可识别异常，由 HTTP 层映射到本契约对应的错误码（如 `PET_NOT_FOUND`、`RECORD_NOT_FOUND`、`REMINDER_NOT_FOUND`），未预期异常映射为 `500 INTERNAL_ERROR`，不得将失败伪装成空列表。具体异常类型由 A/B 在 Service Protocol 中共享定义；Agent 工具必须保留空结果与异常的区别，以便如实说明“没有记录”或“查询失败”。
+- A↔B Service 约定：记录/提醒查询无匹配数据时返回空列表 `[]`；查询或写入失败时抛出可识别异常，由 HTTP 层映射到本契约对应的错误码（如 `PET_NOT_FOUND`、`RECORD_NOT_FOUND`、`REMINDER_NOT_FOUND`），未预期异常映射为 `500 INTERNAL_ERROR`，不得将失败伪装成空列表。具体异常类型由 A/B 在 Service Protocol 中共享定义；Agent 工具必须保留空结果与异常的区别，以便如实说明“没有记录”或“查询失败”。B 已在 `app.services` 提供构造时绑定 `Session` 的只读适配器并返回对应 `*Read` Schema：`BoundPetService` 已接入 `/api/v1/chat`，`BoundReminderService` 与 `BoundRecordService` 已就绪，待 A 侧工具注册后在 P1-5 联调接入。
 
 ### 日常记录（`Record`）
 
