@@ -1,13 +1,13 @@
 # Pet Agent
 
-三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），P1-8 演示数据版附近服务后端已在本 PR 实现（页面待 C 集成），提醒后端与页面已合并（PR #38/#39），Agent 查询工具待接入；真实高德接入（P1-9）与地址解析未实现，真实 POI 尚未查通。
+三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），记录页面已合并（PR #37）；P1-4 提醒后端已合并（PR #38），C 提醒页面已随 PR #39 合并；A 侧 Agent 记录/提醒工具在 PR #42 评审；P1-8 演示数据版附近服务后端已在本 PR 实现（页面集成见 PR #43）；真实高德接入（P1-9）与地址解析未实现，真实 POI 尚未查通。
 
 ## 目录与分工
 
 ```text
 frontend/                     C：React + TypeScript 前端
   src/app/                    入口与应用
-  src/pages/                  已有对话、宠物资料、日常记录和待办提醒页面；附近服务页面待 C 集成
+  src/pages/                  已有对话、宠物资料、日常记录、待办提醒页面；附近服务页面集成见 PR #43
   src/components/             chat / map / common 组件
   src/api/ hooks/ types/ styles/
   tests/
@@ -21,7 +21,7 @@ docs/                         架构、接口及技术决策
 scripts/                      开发辅助脚本
 ```
 
-A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1；演示数据版附近服务后端已实现并明确标注来源（页面待 C 集成），真实高德接入（P1-9）尚未开始，目录预留不代表功能已完成。
+A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1；演示数据版附近服务后端已实现并明确标注来源（页面集成见 PR #43），真实高德接入（P1-9）尚未开始，目录预留不代表功能已完成。
 
 原始《Pet Agent 架构与开发指南》第 9 节将 A、C 的职责写反；本仓库以当前明确的 **A：Agent、B：后端、C：前端** 分工为准。
 
@@ -53,7 +53,7 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | `POST /api/v1/chat` | Agent 对话，JSON 回复；有 LLM_API_KEY 使用 Qwen，否则使用 MockProvider | P0，路由与会话存储已实现；模型历史上下文待修复 |
 | `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端已随 PR #34 合并；前端页面见 PR #37 |
 | `GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}` | 站内提醒和待办查询及 CRUD | P1-4，后端已随 PR #38 合并；C 页面见 PR #39 |
-| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版后端已实现；页面待 C 集成，高德接入待 P1-9 |
+| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版后端见 [PR #40](https://github.com/Nexus-226/2026-11-2/pull/40)；页面集成见 PR #43，高德接入待 P1-9 |
 
 宠物字段、记录/提醒错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。记录/提醒契约已由 A/C 确认；其他 P1 接口约定仍需三人评审。实现时如有变更，同步更新文档和测试。
 
@@ -127,8 +127,19 @@ npm run format -- src/app/App.tsx
 导航“日常记录”支持疫苗、驱虫、洗澡、体重记录的添加、编辑、确认删除及日期倒序时间线，可按宠物、类型和日期范围筛选。默认是浏览器本地演示数据，与后端数据分开。
 
 设置 `VITE_RECORD_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/records`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地记录。已与 B 的 P1-2 记录后端完成真实联调；提醒创建见 P1-4，Agent 记录查询见 P1-5。
+
 ## P1-4：待办提醒页面（C 侧开发）
+
 导航“待办提醒”支持创建、编辑、完成、取消和删除提醒，按到期日期分组展示（逾期/今天/即将/更晚，以及已完成/已取消）。分组直接使用后端返回的 `due_group`，前端不重新计算。默认是浏览器本地演示数据，与后端数据分开。
+
 设置 `VITE_REMINDER_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/reminders`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地提醒。已与 B 的 P1-4 后端（PR #38）完成真实联调。
+
+## P1-8：附近服务演示版后端（B 侧实现）
+
+本 PR 按评审收敛为后端交付：前端页面由 C 侧单独集成（页面集成 PR 见 #43），参考实现保留在分支提交 `465e513`（未运行前端测试与构建，不能据此验收）。后端新增：
+
 - `GET /api/v1/nearby?lat=..&lng=..&type=..&radius_m=..`：高德未接入前按 P1-7 契约回退演示种子数据，返回 `source: "demo"`、`fallback_reason: "amap_not_configured"`，并沿用请求中心计算距离。
 - `GET /api/v1/nearby/demo?type=..&radius_m=..`：用户主动选择的演示区域，使用 `PET_AGENT_DEMO_CENTER_LAT/LNG` 配置的演示中心（未配置时用内置默认值），`search_center.source` 固定为 `demo_region`。
+- `GET /api/v1/places/{place_id}?lat=..&lng=..`：`demo:` 前缀查演示目录；`amap:` 前缀在高德接入前返回 `503 SERVICE_UNAVAILABLE`，不静默替换为演示数据。
+
+演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层暂依赖调用方校验坐标、类别与半径（HTTP 路由已校验），P1-11 工具直调 Service 前需与 A 明确校验责任。`/locations/resolve` 手动地址解析属 P1-9/P1-10，尚未实现。
