@@ -1,5 +1,6 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from app.agent.chat import MAX_HISTORY_CHARS, MAX_HISTORY_MESSAGES, run_chat
 from app.agent.providers.base import ProviderTurn
@@ -103,7 +104,30 @@ def test_run_chat_injects_current_date_into_system_prompt() -> None:
 
     run_chat("你好", None, FakePetService([]), provider=CapturingProvider())
     assert "今天是" in captured["system_prompt"]
-    assert date.today().isoformat() in captured["system_prompt"]
+    assert (
+        datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        in captured["system_prompt"]
+    )
+
+
+def test_run_chat_injects_week_boundaries() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat("这周有哪些安排？", None, FakePetService([]), provider=CapturingProvider())
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    next7_end = today + timedelta(days=6)
+    assert "“未来七天”指" in captured["system_prompt"]
+    assert next7_end.isoformat() in captured["system_prompt"]
+    assert "“本周”指" in captured["system_prompt"]
+    assert monday.isoformat() in captured["system_prompt"]
+    assert sunday.isoformat() in captured["system_prompt"]
 
 
 def test_run_chat_prompt_marks_no_associated_pet() -> None:
