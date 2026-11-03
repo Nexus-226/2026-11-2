@@ -139,5 +139,9 @@ npm run format -- src/app/App.tsx
 
 手动地址解析、真实地图 SDK、高德接入及 Agent 附近查询不在本次页面范围。P1-8 真实联调已由用户确认通过（2026-11-03），PR #40 已合并，C 页面 PR #43 待合并。
 
+## P1-10：手动地址解析（C 侧）
+
+导航“附近服务”内新增“手动输入地址”入口：输入地址 → `POST /api/v1/locations/resolve` 解析 → 候选列表由用户主动选择（不自动选第一条）→ 以所选 WGS84 坐标与 `center_source=resolved_address` 查询附近地点，切换类别/半径复用所选地址。真实地址解析端点尚未由 B 实现，当前仅验证到预期错误展示；高德未配置或解析失败不猜测坐标、不自动切换演示中心。
+
 - `GET /api/v1/nearby?lat=..&lng=..&type=..&radius_m=..`：高德未接入前按 P1-7 契约回退演示种子数据，返回 `source: "demo"`、`fallback_reason: "amap_not_configured"`，并沿用请求中心计算距离。
 - `GET /api/v1/nearby/demo?type=..&radius_m=..`：用户主动选择的演示区域，使用 `PET_AGENT_DEMO_CENTER_LAT/LNG` 配置的演示中心（未配置时用内置默认值），`search_center.source` 固定为 `demo_region`。

@@ -1,0 +1,59 @@
+.address-resolver {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.address-resolver form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.address-resolver label {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+}
+.address-resolver input {
+  padding: 10px;
+  border: 1px solid #cbd8d0;
+  border-radius: 8px;
+  background: white;
+  color: inherit;
+  font: inherit;
+  min-width: 0;
+}
+.address-resolver button {
+  padding: 10px 16px;
+  border: 1px solid #bdccc3;
+  border-radius: 8px;
+  background: #edf4ed;
+  color: #253d39;
+  cursor: pointer;
+}
+.address-resolver button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.address-matches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.address-matches button {
+  width: 100%;
+  text-align: left;
+  background: white;
+  border: 1px solid #e0e7df;
+  padding: 12px;
+  border-radius: 8px;
+}
+.address-matches button:hover {
+  border-color: #bdccc3;
+}
+.address-resolver [role="alert"] {
+  color: #a13528;
+}

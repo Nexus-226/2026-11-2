@@ -1,6 +1,8 @@
 import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import { nearbyClient } from "../api/nearby";
+import AddressResolver from "../components/nearby/AddressResolver";
+import type { AddressMatch } from "../types/location";
 import {
   type NearbyCategory,
   type NearbyResponse,
@@ -67,7 +69,7 @@ function sourceBanner(result: NearbyResponse): string {
   return "数据来源：高德（实时）。";
 }
 
-type LoadMode = "locate" | "demo";
+type LoadMode = "locate" | "demo" | "address";
 
 interface MapPoint {
   place: Place;
@@ -100,6 +102,11 @@ export default function NearbyPage({
   const modeRef = useRef<LoadMode | null>(null);
   const requestIdRef = useRef(0);
   const centerRef = useRef<{ lat: number; lng: number } | null>(null);
+  const resolvedRef = useRef<{
+    lat: number;
+    lng: number;
+    label: string;
+  } | null>(null);
   useEffect(
     () => () => {
       requestIdRef.current += 1;
@@ -128,6 +135,16 @@ export default function NearbyPage({
           radius_m: radiusM,
           center_source: "user_location",
         });
+      } else if (mode === "address") {
+        const resolved = resolvedRef.current;
+        if (!resolved) throw new Error("请先选择地址候选。");
+        data = await nearbyClient.search({
+          lat: resolved.lat,
+          lng: resolved.lng,
+          type,
+          radius_m: radiusM,
+          center_source: "resolved_address",
+        });
       } else {
         data = await nearbyClient.searchDemoRegion(type, radiusM);
       }
@@ -153,6 +170,15 @@ export default function NearbyPage({
 
   function retry() {
     void load(modeRef.current ?? "demo", category, radius);
+  }
+
+  function handleResolved(match: AddressMatch) {
+    resolvedRef.current = {
+      lat: match.location.lat,
+      lng: match.location.lng,
+      label: match.formatted_address,
+    };
+    void load("address", category, radius);
   }
 
   const points = result ? schematicPoints(result) : [];
@@ -193,6 +219,7 @@ export default function NearbyPage({
                 使用演示区域
               </button>
             </div>
+            <AddressResolver onResolved={handleResolved} disabled={loading} />
           </section>
         )}
         {started && (
@@ -213,6 +240,7 @@ export default function NearbyPage({
               使用演示区域
             </button>
             <span>定位仅用于本次查询，不保存；演示区域为非实时位置。</span>
+            <AddressResolver onResolved={handleResolved} disabled={loading} />
           </div>
         )}
         {error && (
@@ -271,10 +299,11 @@ export default function NearbyPage({
                 <p className="nearby-source">{sourceBanner(result)}</p>
                 <p className="nearby-center">
                   查询中心：
-                  {result.search_center.label}
-                  （纬度 {result.search_center.location.lat.toFixed(
-                    4,
-                  )}，经度 {result.search_center.location.lng.toFixed(4)}）
+                  {modeRef.current === "address" && resolvedRef.current
+                    ? resolvedRef.current.label
+                    : result.search_center.label}
+                  （纬度 {result.search_center.location.lat.toFixed(4)}，经度{" "}
+                  {result.search_center.location.lng.toFixed(4)}）
                 </p>
                 {result.places.length === 0 ? (
                   <p className="nearby-empty">
