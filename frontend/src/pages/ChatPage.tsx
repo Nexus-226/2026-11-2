@@ -158,6 +158,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
   }
 
   function startNewSession() {
+    if (requestRef.current) return;
     if (
       messages.length > 0 &&
       !window.confirm("确定开始新对话吗？当前页面的聊天记录将清空。")
@@ -169,6 +170,23 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
     setSessionId(null);
     setNotice("");
     setFailedRequest(null);
+  }
+
+  function changePet(nextPetId: string) {
+    if (requestRef.current || nextPetId === selectedPetId) return;
+    if (
+      messages.length > 0 &&
+      !window.confirm(
+        "切换关联宠物将开始新对话，当前页面的聊天记录将清空。是否继续？",
+      )
+    )
+      return;
+    setSelectedPetId(nextPetId);
+    setMessages([]);
+    setDraft("");
+    setSessionId(null);
+    setFailedRequest(null);
+    setNotice("关联宠物已变更，已开始新对话。");
   }
 
   return (
@@ -234,7 +252,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
               id="chat-pet"
               value={selectedPetId}
               disabled={busy || petsLoading || !canSelectPets}
-              onChange={(event) => setSelectedPetId(event.target.value)}
+              onChange={(event) => changePet(event.target.value)}
             >
               <option value="">暂不关联宠物</option>
               {pets.map((pet) => (

@@ -164,3 +164,108 @@ describe("聊天页面", () => {
     expect((mocks.send.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
   });
 });
+
+describe("P0-8 前端会话边界", () => {
+  it("切换和清空关联均清除旧会话，取消切换则保留", async () => {
+    const user = userEvent.setup();
+    mocks.list.mockResolvedValue([
+      pet,
+      { ...pet, id: "00000000-0000-4000-8000-000000000003", name: "小白" },
+    ]);
+    mocks.send.mockResolvedValue(response);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<ChatPage active onNavigate={vi.fn()} />);
+    await screen.findByRole("option", { name: "豆豆" });
+    await user.selectOptions(screen.getByLabelText("关联宠物"), pet.id);
+    await user.type(screen.getByLabelText("输入你的问题"), "旧问题");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText(response.reply);
+    await user.selectOptions(
+      screen.getByLabelText("关联宠物"),
+      "00000000-0000-4000-8000-000000000003",
+    );
+    expect((screen.getByLabelText("关联宠物") as HTMLSelectElement).value).toBe(
+      pet.id,
+    );
+    expect(screen.getByText("旧问题")).toBeTruthy();
+    confirm.mockReturnValue(true);
+    await user.selectOptions(
+      screen.getByLabelText("关联宠物"),
+      "00000000-0000-4000-8000-000000000003",
+    );
+    expect(screen.queryByText("旧问题")).toBeNull();
+    await user.type(screen.getByLabelText("输入你的问题"), "新问题");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText(response.reply);
+    expect(mocks.send.mock.calls[1][0].session_id).toBeNull();
+    await user.selectOptions(screen.getByLabelText("关联宠物"), "");
+    await user.type(screen.getByLabelText("输入你的问题"), "无关联");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText(response.reply);
+    expect(mocks.send.mock.calls[2][0]).toEqual({
+      message: "无关联",
+      pet_id: null,
+      session_id: null,
+    });
+  });
+
+  it("续聊失败保留 ID，切换宠物后不再重试旧宠物请求", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mocks.send
+      .mockResolvedValueOnce(response)
+      .mockRejectedValueOnce(new Error("失败"));
+    render(<ChatPage active onNavigate={vi.fn()} />);
+    await screen.findByRole("option", { name: "豆豆" });
+    await user.type(screen.getByLabelText("输入你的问题"), "第一条");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText(response.reply);
+    await user.type(screen.getByLabelText("输入你的问题"), "第二条");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText("失败");
+    expect(mocks.send.mock.calls[1][0].session_id).toBe(response.session_id);
+    mocks.send.mockResolvedValue(response);
+    await user.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(3));
+    expect(mocks.send.mock.calls[2][0].session_id).toBe(response.session_id);
+    await user.selectOptions(screen.getByLabelText("关联宠物"), pet.id);
+    expect(screen.queryByRole("button", { name: "重试" })).toBeNull();
+  });
+});
+
+it("P0-8 在途禁用操作，取消后新会话不接收旧请求迟到回复", async () => {
+  const user = userEvent.setup();
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  let finish!: (value: typeof response) => void;
+  mocks.send.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<ChatPage active onNavigate={vi.fn()} />);
+  await screen.findByRole("option", { name: "豆豆" });
+  await user.type(screen.getByLabelText("输入你的问题"), "旧请求");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  expect(
+    (screen.getByLabelText("关联宠物") as HTMLSelectElement).disabled,
+  ).toBe(true);
+  expect(
+    (screen.getByRole("button", { name: "新对话" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.submit(screen.getByLabelText("输入你的问题").closest("form")!);
+  expect(mocks.send).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", { name: "停止等待" }));
+  await act(async () => {
+    finish(response);
+  });
+  await screen.findByRole("button", { name: "发送" });
+  expect(screen.queryByText(response.reply)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "新对话" }));
+  mocks.send.mockResolvedValue(response);
+  await user.type(screen.getByLabelText("输入你的问题"), "新请求");
+  await user.click(screen.getByRole("button", { name: "发送" }));
+  await screen.findByText(response.reply);
+  expect(mocks.send.mock.calls[1][0].session_id).toBeNull();
+});
