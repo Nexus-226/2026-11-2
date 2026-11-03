@@ -344,3 +344,82 @@ def test_resolve_never_logs_address_or_key(
     assert response.status_code == 502
     assert "用户的私密地址文本" not in caplog.text
     assert TEST_KEY not in caplog.text
+
+
+def test_resolve_missing_geocodes_returns_502(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(requests, {"status": "1", "info": "OK", "infocode": "10000"}),
+    )
+    response = resolve(client)
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "UPSTREAM_ERROR"
+
+
+def test_resolve_non_list_geocodes_returns_502(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(
+            requests,
+            {
+                "status": "1",
+                "info": "OK",
+                "infocode": "10000",
+                "geocodes": {"foo": "bar"},
+            },
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "UPSTREAM_ERROR"
+
+
+def test_resolve_skips_invalid_coordinate_candidates(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(
+            requests,
+            ok_body(
+                [
+                    geocode("nan 坐标", gcj_lat=float("nan"), gcj_lng=float("nan")),
+                    geocode("inf 坐标", gcj_lat=float("inf"), gcj_lng=float("inf")),
+                    geocode("越界坐标", gcj_lat=999.0, gcj_lng=999.0),
+                    geocode("正常", gcj_lat=39.9045, gcj_lng=116.4050),
+                ]
+            ),
+        ),
+    )
+    body = resolve(client).json()
+    assert [match["formatted_address"] for match in body["matches"]] == ["正常"]
+
+
+def test_resolve_closes_amap_client(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closed: list[bool] = []
+    original_close = AMapClient.close
+
+    def recording_close(self: AMapClient) -> None:
+        closed.append(True)
+        original_close(self)
+
+    monkeypatch.setattr(AMapClient, "close", recording_close)
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        geocode_transport(
+            requests, ok_body([geocode("x", gcj_lat=39.9, gcj_lng=116.4)])
+        ),
+    )
+    response = resolve(client)
+    assert response.status_code == 200
+    assert closed == [True]

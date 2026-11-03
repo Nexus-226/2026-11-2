@@ -12,6 +12,7 @@ import math
 from dataclasses import dataclass
 
 import httpx
+from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,16 @@ class AMapClient:
         self._base_url = base_url.rstrip("/")
         self._client = httpx.Client(timeout=timeout, transport=transport)
 
+    def close(self) -> None:
+        """关闭底层 HTTP 连接池，避免每次请求泄漏连接。"""
+        self._client.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
     def search_around(
         self, *, lat: float, lng: float, keywords: str, radius_m: int
     ) -> list[AMapPlace]:
@@ -219,10 +230,10 @@ class AMapClient:
 
 
 def _parse_geocodes(payload: dict[str, object]) -> list[AMapGeocodeMatch]:
-    """解析地理编码候选；无匹配或结构异常时返回空列表，由上层 404。"""
+    """解析地理编码候选；`geocodes` 缺失或类型错误视为上游异常。"""
     geocodes = payload.get("geocodes")
     if not isinstance(geocodes, list):
-        return []
+        raise AMapUnavailable("高德返回的 geocodes 结构异常")
     matches: list[AMapGeocodeMatch] = []
     for item in geocodes:
         match = _parse_geocode(item)
@@ -292,9 +303,14 @@ def _parse_gcj02_location(location: object) -> tuple[float | None, float | None]
     if len(parts) != 2:
         return None, None
     try:
-        return float(parts[1]), float(parts[0])
+        lat, lng = float(parts[1]), float(parts[0])
     except ValueError:
         return None, None
+    if not (math.isfinite(lat) and math.isfinite(lng)):
+        return None, None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+        return None, None
+    return lat, lng
 
 
 def _clean_text(value: object) -> str | None:
