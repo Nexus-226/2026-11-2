@@ -7,6 +7,9 @@ from app.db.models import Pet
 from app.db.repositories import pets as pet_repository
 from app.schemas.pet import PetCreate, PetRead
 from app.services.record_service import ensure_pet_can_be_deleted
+from app.services.reminder_service import (
+    ensure_pet_can_be_deleted as ensure_pet_has_no_reminders,
+)
 
 
 def list_pets(session: Session) -> list[Pet]:
@@ -60,4 +63,5 @@ def update_pet(session: Session, pet_id: UUID, values: dict[str, object]) -> Pet
 def delete_pet(session: Session, pet_id: UUID) -> None:
     pet = get_pet_or_404(session, pet_id)
     ensure_pet_can_be_deleted(session, pet_id)
+    ensure_pet_has_no_reminders(session, pet_id)
     pet_repository.delete_pet(session, pet)
