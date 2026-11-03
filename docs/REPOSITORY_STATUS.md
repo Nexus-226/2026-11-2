@@ -5,11 +5,11 @@
 | 项目 | 当前状态 | 下一步 |
 |---|---|---|
 | React + TypeScript + Vite | 宠物资料和聊天页面支持演示，已预留 API Client | C 与 A/B 联调真实接口 |
-| FastAPI | `GET /health`、宠物 CRUD、`/api/v1/chat` 和 P1-2 记录 CRUD 已实现；P1-4 提醒 CRUD 与迁移在本 PR 实现；错误格式和参数校验有测试 | 评审并合并提醒 API，后续实现地图路由 |
+| FastAPI | `GET /health`、宠物 CRUD、`/api/v1/chat` 和 P1-2 记录 CRUD 已实现；P1-4 提醒 CRUD 与迁移已通过 PR #38 合并；错误格式和参数校验有测试 | 提醒 API 已合并，C 页面已提交（PR #39），后续实现地图路由 |
 | Agent 与工具 | Runtime、宠物资料工具、对话编排和 Qwen/Mock Provider 已实现 | A/B 修复数据库历史传入模型（P0-8），C 联调验证 |
-| 业务和数据 | SQLite/SQLAlchemy 已持久化宠物、会话、消息、记录及提醒；记录/提醒均有 Alembic 迁移 | P1-1 已获 A/C 确认；提醒 API 待评审，页面和 Agent 查询仍待推进 |
+| 业务和数据 | SQLite/SQLAlchemy 已持久化宠物、会话、消息、记录及提醒；记录/提醒均有 Alembic 迁移 | P1-1 已获 A/C 确认；提醒 API 已合并（PR #38），C 页面已提交（PR #39）；Agent 查询仍待推进 |
 | 会话和模型 | 有 LLM_API_KEY 使用真实 Qwen，否则使用 Mock；历史已保存但未传入模型 | 按 P0-8 修复上下文，并完成 P0-7 全流程验收；复用 session_id 不等于模型已有记忆 |
-| 日常记录/站内提醒/Agent 查询（P1） | P1-1 契约已获 A/C 确认；P1-2 已合并；P1-4 后端提醒 CRUD 与迁移在本 PR 实现；页面和 Agent 工具尚未实现 | 合并后由 C 实现提醒页面，A/B 对齐只读 Service 并推进 P1-5，随后完成 P1-6 验收 |
+| 日常记录/站内提醒/Agent 查询（P1） | P1-1 契约已获 A/C 确认；P1-2 已合并；P1-4 后端提醒 CRUD 已合并（PR #38），C 页面已提交（PR #39）；Agent 工具尚未实现 | A/B 对齐只读 Service 并推进 P1-5，随后完成 P1-6 验收 |
 | 地图（P1） | 前后端目录已预留，尚未接入，POI 尚未查通 | 记录主线之后推进 P1-7～P1-12；完整附近服务仍需真实高德验收 |
 | 增强功能（P2） | 均为待开发计划 | 按 TASKS.md 的顺位和依赖领取，不作为当前已实现能力 |
 | 文档和配置 | README、PR 指南、技术栈和 API 草案、`.env.example` 已有 | 按评审维护契约；LLM 环境变量及可选 .env 加载已实现，不提交真实密钥 |
