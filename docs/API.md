@@ -122,7 +122,7 @@ Agent 在后端进程内调用注册表中的工具；工具不从前端直接�
 |---|---|---|---|
 | `get_pet_profile` | P0 | `pet_id`：UUID | 返回上面的 `Pet`；不存在返回可识别的 `PET_NOT_FOUND` |
 | `list_pets` | P0 | 空对象 `{}` | 返回 `Pet[]`，无结果为 `[]` |
-| `search_nearby_pet_services` | P1 | `lat`、`lng`、`type`、`radius_m` | 返回下述 `NearbyResponse`；失败返回可识别错误 |
+| `search_nearby_pet_services` | P1 | `lat`、`lng`、`type`、`radius_m`、`center_source`（可选，默认 `user_location`） | Service 将 `center_source` 原样传给附近查询并返回下述 `NearbyResponse`；省略时使用 `user_location`；失败返回可识别错误 |
 
 工具参数经 Pydantic 校验，仅执行注册表允许的工具；每轮最多连续调用 3 次。P0 工具为本地快速调用，暂不实现工具级超时；真实外部工具接入时再补超时机制。工具无权直接访问数据库或地图客户端，由 Service 层负责。
 
@@ -210,11 +210,11 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 附近查询：`GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000&center_source=user_location`。
 
 - 请求及响应 `location.lat`/`location.lng` 均为 WGS84 十进制度数；纬度 -90～90，经度 -180～180。高德 Web Service 请求前由后端把 WGS84 转为 GCJ-02；高德返回的 GCJ-02 坐标由后端转回 WGS84。前端地图 SDK 的坐标适配由 C 负责，不向前端暴露高德原始坐标或响应字段。
-- `/nearby` 接受 `center_source` 查询参数，取值为 `user_location` 或 `resolved_address`，省略时默认为 `user_location`；非法值返回 `422 VALIDATION_ERROR`。地址解析返回候选后，前端将用户选择的 WGS84 坐标及 `center_source=resolved_address` 一并用于附近查询。后端在 `search_center.source` 原样返回该值。`search_center.label` 由后端按来源生成：`user_location` 为“当前位置”，`resolved_address` 为“所选地址”；不回显或持久化原始地址。演示接口不接受该参数，固定返回 `source: "demo_region"` 和“演示区域（非实时位置）”标签。
+- `/nearby` 接受 `center_source` 查询参数，取值为 `user_location` 或 `resolved_address`，省略时默认为 `user_location`；非法值返回 `422 VALIDATION_ERROR`。A 的 `search_nearby_pet_services` 工具同样接受可选 `center_source`，默认 `user_location`，并将其传入与 HTTP 路由共用的 B 附近查询 Service；Service 原样保留该值用于生成响应，不得根据地点数据来源或模型推断/改写查询中心来源。地址解析返回候选后，C 将用户选择的 WGS84 坐标及 `center_source=resolved_address` 一并用于附近查询；具体候选地址由前端临时保存在客户端并自行展示，后端不回显或持久化原始地址，`search_center.label` 中“所选地址”仅为通用兜底标签。后端在 `search_center.source` 原样返回该值。演示入口不接受 `center_source`，固定返回 `search_center.source: "demo_region"` 和“演示区域（非实时位置）”标签。
 - `type` 为 `pet_hospital`、`pet_grooming`、`pet_store` 之一；`radius_m` 为整数 1000–20000，省略时默认 3000。旧架构指南流程图中的 `radius` 在实现时统一使用此处的 `radius_m`。
 - 距离由 B 按 WGS84 查询点和地点坐标使用球面距离计算，四舍五入为非负整数米；仅返回计算距离不超过 `radius_m` 的地点，按距离升序并以 `id` 升序稳定打破并列。高德过滤半径不替代服务端距离校验；演示种子数据使用同一算法。
-- 若用户拒绝定位且未配置高德，C 提供用户主动选择的“使用演示区域”入口；B 提供 `GET /api/v1/nearby/demo?type=pet_hospital&radius_m=3000`，使用明确配置的 WGS84 演示中心和种子数据，不需要高德或地址解析。不得自动进入演示区域，也不得将用户输入的地址描述为已解析或使用该地址计算位置。响应必须标记 `search_center.source: "demo_region"`，并显示明确的非实时标签。
-- `GET /api/v1/nearby` 与 `/api/v1/nearby/demo` 均返回 `200 NearbyResponse`，地点集合位于 `places`，无结果时为 `[]`。响应包含 `search_center`（实际查询中心、中心来源及供页面展示的标签）、`source`（本次地点数据来源：`amap` 或 `demo`）和 `fallback_reason`（`null`、`amap_unavailable` 或 `amap_not_configured`）。正常位置查询中 `search_center.source` 为 `user_location` 或 `resolved_address`；演示入口固定为 `demo_region`。高德正常返回空列表时是 `source: "amap"`、`places: []`、`fallback_reason: null`，不得当成上游失败；高德不可用并回退演示数据时即使 `places` 为空，也必须通过 `source: "demo"` 和 `fallback_reason: "amap_unavailable"` 标明降级；未配置高德时，若有用户提供的有效查询中心则可回退演示数据并标记 `amap_not_configured`。P1-8 纯演示响应为 `source: "demo"`、`fallback_reason: null`。调用失败且没有可用回退结果时返回统一错误体和 `UPSTREAM_ERROR`/`UPSTREAM_TIMEOUT`，不伪装成空结果。
+- 若用户拒绝定位且未配置高德，C 提供用户主动选择的“使用演示区域”入口；B 提供 `GET /api/v1/nearby/demo?type=pet_hospital&radius_m=3000`，使用明确配置的 WGS84 演示中心和种子数据，不需要高德或地址解析。不得自动进入演示区域，也不得将用户输入的地址描述为已解析或使用该地址计算位置。该显式入口响应必须标记 `search_center.source: "demo_region"`，并显示明确的非实时标签。
+- `GET /api/v1/nearby` 与 `/api/v1/nearby/demo` 均返回 `200 NearbyResponse`，地点集合位于 `places`，无结果时为 `[]`。响应包含 `search_center`（实际用于距离计算的查询中心、中心来源及供页面展示的标签）、顶层 `source`（地点数据来源：`amap` 或 `demo`）和 `fallback_reason`（`null`、`amap_unavailable` 或 `amap_not_configured`）。`search_center.source` 是不同字段，表示查询中心来源：附近查询时为透传的 `user_location` 或 `resolved_address`；只有用户主动选择 `/nearby/demo` 时才是 `demo_region`。高德正常返回空列表时是顶层 `source: "amap"`、`places: []`、`fallback_reason: null`，不得当成上游失败。`/nearby` 因高德不可用或未配置而回退时，必须继续使用原请求中的 WGS84 查询中心计算距离并保留原 `search_center.source`/`label`，不得切换到配置的演示中心；仅地点数据改用演示种子数据，顶层 `source: "demo"`，并用相应 `fallback_reason` 标明降级。演示种子可能离原查询中心较远，故回退的 `places` 允许为空；此时 `source: "demo"` 加非空 `fallback_reason` 表示“已降级且没有匹配到附近演示地点”，不能推断真实附近没有服务。前端/Agent 应同时明确告知实时服务不可用、当前结果为演示数据；空列表只表示演示数据中无距离符合条件的地点。`/nearby/demo` 则使用配置的演示中心与演示地点，顶层 `source: "demo"`、`fallback_reason: null`、`search_center.source: "demo_region"`。调用失败且没有可用回退结果时返回统一错误体和 `UPSTREAM_ERROR`/`UPSTREAM_TIMEOUT`，不伪装成空结果。
 - 拒绝定位时由 C 提供手动输入地址；B 提供 `POST /api/v1/locations/resolve`，请求体为 `{ "address": "..." }`，首尾空白去除后长度为 1–200。返回 `200` 和 `matches` 数组，每项仅包含 `formatted_address`、WGS84 `location` 与 `data_source: "amap"`，不透出厂商原始字段。例如：`{"matches":[{"formatted_address":"北京市示例路 18 号","location":{"lat":39.9001,"lng":116.4001},"data_source":"amap"}]}`。无匹配返回 `404 ADDRESS_NOT_FOUND`；输入校验失败返回 `422 VALIDATION_ERROR`；上游失败/超时分别使用 `502 UPSTREAM_ERROR`/`504 UPSTREAM_TIMEOUT`。多条候选均返回，由用户选择后再查询附近地点；不自动选择第一条。该接口在高德未配置时返回 `503 SERVICE_UNAVAILABLE`，不根据字符串猜坐标。地址和精确坐标仅用于本次请求，不写入业务数据库或日志；高德服务密钥仅由后端读取。
 
 ```json
@@ -245,8 +245,8 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 
 数据来源和 ID 约定：真实高德数据使用 `data_source: "amap"`、`id: "amap:<高德地点 ID>"`；种子演示数据使用 `data_source: "demo"`、`id: "demo:<稳定的演示地点 ID>"`。前端和 Agent 必须明确标注演示数据，不能称为实时结果。高德不可用时如果回落演示数据，也必须标注来源；不能提供真实导航时 `navigation_url` 为 `null`。
 
-演示区域响应沿用 `NearbyResponse` 结构，`search_center.source` 为 `demo_region`、`search_center.label` 明确为“演示区域（非实时位置）”；使用部署配置的演示中心，不把输入地址映射到此中心。该入口仅展示演示地点，`data_source` 与 ID 保持 `demo`。
+演示区域响应沿用 `NearbyResponse` 结构，顶层 `source` 为地点数据来源 `demo`、`fallback_reason` 为 `null`；`search_center.source` 为查询中心来源 `demo_region`，`search_center.label` 明确为“演示区域（非实时位置）”。使用部署配置的演示中心，不把输入地址映射到此中心。该入口仅展示演示地点，地点的 `data_source` 与 ID 保持 `demo`。
 
 `GET /api/v1/places/{place_id}?lat=39.9001&lng=116.4001` 返回 `200 Place`；详情中的 `distance_m` 依赖查询中心，因此必须附带 `lat`、`lng`，规则同上。按 ID 来源只查询对应数据源：`amap:<id>` 只查高德，`demo:<id>` 只查演示目录。对象不存在返回 `404 PLACE_NOT_FOUND`；高德未配置或查询失败时对 `amap:<id>` 返回可识别的 `503 SERVICE_UNAVAILABLE`、`502 UPSTREAM_ERROR` 或 `504 UPSTREAM_TIMEOUT`，绝不静默替换成演示地点；演示地点也不回退为高德结果。地图与列表使用同一 `NearbyResponse.places` 结果集；地图渲染失败需保留列表或给出可理解错误。
 
-**P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、`center_source` 来源传递与标签生成规则、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
+**P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、HTTP 与 Agent 工具 `center_source` 默认值和原样传递规则、回退沿用原查询中心且允许空演示结果、顶层 `source` 与 `search_center.source` 的字段路径及语义、具体地址由前端自持展示、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
