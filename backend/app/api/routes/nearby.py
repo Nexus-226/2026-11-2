@@ -1,4 +1,4 @@
-"""附近服务查询路由（P1-8 演示数据版）。"""
+"""附近服务查询路由（P1-8 演示数据版；P1-9 接入高德真实 POI）。"""
 
 from typing import Annotated, Literal
 
@@ -18,7 +18,7 @@ def search_nearby(
     radius_m: Annotated[int, Query(ge=1000, le=20000)] = 3000,
     center_source: Literal["user_location", "resolved_address"] = "user_location",
 ) -> NearbyResponse:
-    """附近查询；高德接入前按契约回退演示数据并标注来源。"""
+    """附近查询；未配置高德或调用失败时按契约回落演示数据并标注来源。"""
     return nearby_service.search_nearby(
         lat=lat,
         lng=lng,

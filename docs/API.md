@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图仅实现演示数据版后端接口（P1-8；前端页面待 C 集成，真实高德接入与 `/locations/resolve` 地址解析待 P1-9/P1-10）。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端已随 PR #34 合并，提醒后端已随 PR #38 合并（C 提醒页面在 PR #39 评审）。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图演示版后端与页面已随 PR #40/#43 合并，P1-9 高德真实接入（POI 查询与详情）由本 PR 实现，`/locations/resolve` 地址解析待 P1-10。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端已随 PR #34 合并，提醒后端已随 PR #38 合并（C 提醒页面已随 PR #39 合并）。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
 
 ## 共同规则
 
@@ -203,9 +203,9 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - P1 Agent 保持只读，不承诺“已保存/已设置提醒/关闭程序后会通知”。P2 自然语言写入须经可编辑草稿、用户确认及服务端校验后提交，成功、失败和去重按实际接口处理。
 - 附近服务的地点、距离和来源以工具结果为准；缺失的营业时间、携宠规则等标为未知，不编造。演示/真实数据及回退状态需可识别，空结果时也适用。
 
-## P1-7：附近服务与地址解析契约提案（待 A/C 确认）
+## P1-7：附近服务与地址解析契约（已随 PR #35 合并）
 
-本节为 B 提交的 P1-7 契约提案，尚未实现或冻结。A、C 确认地点结构、坐标、距离、来源/回退状态和手动地址流程后，P1-8 才按演示数据实现，P1-9 再单独接入高德；两者不得合并成一个 PR。
+本节为 P1-7 契约，已随 PR #35 合并。P1-8 已按演示数据实现并合并（PR #40，页面见 PR #43），P1-9 高德真实接入由独立 PR 实现；两者不得合并成一个 PR。
 
 附近查询：`GET /api/v1/nearby?lat=39.9001&lng=116.4001&type=pet_hospital&radius_m=3000&center_source=user_location`。
 
@@ -248,5 +248,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 演示区域响应沿用 `NearbyResponse` 结构，顶层 `source` 为地点数据来源 `demo`、`fallback_reason` 为 `null`；`search_center.source` 为查询中心来源 `demo_region`，`search_center.label` 明确为“演示区域（非实时位置）”。使用部署配置的演示中心，不把输入地址映射到此中心。该入口仅展示演示地点，地点的 `data_source` 与 ID 保持 `demo`。
 
 `GET /api/v1/places/{place_id}?lat=39.9001&lng=116.4001` 返回 `200 Place`；详情中的 `distance_m` 依赖查询中心，因此必须附带 `lat`、`lng`，规则同上。按 ID 来源只查询对应数据源：`amap:<id>` 只查高德，`demo:<id>` 只查演示目录。对象不存在返回 `404 PLACE_NOT_FOUND`；高德未配置或查询失败时对 `amap:<id>` 返回可识别的 `503 SERVICE_UNAVAILABLE`、`502 UPSTREAM_ERROR` 或 `504 UPSTREAM_TIMEOUT`，绝不静默替换成演示地点；演示地点也不回退为高德结果。地图与列表使用同一 `NearbyResponse.places` 结果集；地图渲染失败需保留列表或给出可理解错误。
+
+实现状态（P1-9）：配置 `AMAP_WEB_SERVICE_KEY` 后 `/nearby` 走高德 v5 `place/around`（按类别关键字召回、WGS84↔GCJ-02 转换、服务端距离过滤、`(distance_m, id)` 稳定排序、按高德地点 ID 去重），未配置/失败按上述语义回落演示数据；`amap:` 详情走 v5 `place/detail`（503/502/504/404 语义如上）；高德无可靠营业状态时 `business_status` 固定 `unknown`，`navigation_url` 保持 `null`。测试均使用模拟响应，不消耗真实配额。
 
 **P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、HTTP 与 Agent 工具 `center_source` 默认值和原样传递规则、回退沿用原查询中心且允许空演示结果、顶层 `source` 与 `search_center.source` 的字段路径及语义、具体地址由前端自持展示、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。

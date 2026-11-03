@@ -26,6 +26,7 @@ PLACE_FIELDS = {
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    monkeypatch.delenv("AMAP_WEB_SERVICE_KEY", raising=False)
     monkeypatch.delenv("PET_AGENT_DEMO_CENTER_LAT", raising=False)
     monkeypatch.delenv("PET_AGENT_DEMO_CENTER_LNG", raising=False)
     database_url = URL.create("sqlite", database=str(tmp_path / "nearby.db"))
