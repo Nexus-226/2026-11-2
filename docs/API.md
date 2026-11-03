@@ -251,4 +251,6 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 
 实现状态（P1-9）：配置 `AMAP_WEB_SERVICE_KEY` 后 `/nearby` 走高德 v5 `place/around`（按类别关键字召回、WGS84↔GCJ-02 转换、服务端距离过滤、`(distance_m, id)` 稳定排序、按高德地点 ID 去重），未配置/失败按上述语义回落演示数据；`amap:` 详情走 v5 `place/detail`（503/502/504/404 语义如上）；高德无可靠营业状态时 `business_status` 固定 `unknown`，`navigation_url` 保持 `null`。测试均使用模拟响应，不消耗真实配额。
 
+实现状态（P1-10）：`POST /api/v1/locations/resolve` 已按上述契约实现，走高德 v3 `geocode/geo`；候选收敛为 `formatted_address` + WGS84 `location` + `data_source`，多条候选全部返回，无匹配 404、未配置 503、上游失败/超时 502/504，无演示回退。前端把用户所选候选作为 `/nearby` 查询中心并以 `center_source=resolved_address` 查询；导航链接由前端把 WGS84 转为 GCJ-02 后生成，仅对 `data_source: "amap"` 地点提供且由用户主动打开。测试使用模拟响应，不消耗真实配额。
+
 **P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、HTTP 与 Agent 工具 `center_source` 默认值和原样传递规则、回退沿用原查询中心且允许空演示结果、顶层 `source` 与 `search_center.source` 的字段路径及语义、具体地址由前端自持展示、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。

@@ -30,3 +30,8 @@ export interface NearbyResponse {
   source: NearbyDataSource;
   fallback_reason: FallbackReason;
 }
+export interface AddressMatch {
+  formatted_address: string;
+  location: GeoLocation;
+  data_source: "amap";
+}
