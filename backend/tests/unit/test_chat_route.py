@@ -70,6 +70,8 @@ def test_chat_route_runs_agent_and_persists_turn(
         message: str,
         requested_pet_id: UUID | None,
         service: PetService,
+        record_service: object = None,
+        reminder_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -125,6 +127,84 @@ def test_chat_route_runs_agent_and_persists_turn(
         assert session.scalar(select(ChatSession.id)) == result["session_id"]
 
 
+def test_chat_route_registers_record_tool_with_real_service(
+    chat_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = chat_client
+    pet_id = client.post(
+        "/api/v1/pets", json={"name": "豆豆", "species": "dog"}
+    ).json()["id"]
+    created = client.post(
+        "/api/v1/records",
+        json={
+            "pet_id": pet_id,
+            "record_type": "deworming",
+            "occurred_on": "2026-10-20",
+        },
+    )
+    assert created.status_code == 201
+
+    from app.api.routes.chat import get_llm_provider
+
+    app.dependency_overrides[get_llm_provider] = lambda: MockProvider(
+        [
+            ProviderTurn(
+                tool_call=ToolCallRequest(
+                    name="list_pet_records",
+                    args={"pet_id": pet_id, "record_type": "deworming"},
+                )
+            ),
+            ProviderTurn(reply="上次驱虫是 2026-10-20。"),
+        ]
+    )
+
+    response = client.post(
+        "/api/v1/chat",
+        json={"message": "上次什么时候驱虫？", "pet_id": pet_id},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["tool_calls"] == [{"name": "list_pet_records", "status": "success"}]
+    assert result["reply"] == "上次驱虫是 2026-10-20。"
+
+
+def test_chat_route_registers_reminder_tool_with_real_service(
+    chat_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = chat_client
+    pet_id = client.post(
+        "/api/v1/pets", json={"name": "豆豆", "species": "dog"}
+    ).json()["id"]
+    created = client.post(
+        "/api/v1/reminders",
+        json={"pet_id": pet_id, "title": "下次驱虫", "due_on": "2026-11-09"},
+    )
+    assert created.status_code == 201
+
+    from app.api.routes.chat import get_llm_provider
+
+    app.dependency_overrides[get_llm_provider] = lambda: MockProvider(
+        [
+            ProviderTurn(
+                tool_call=ToolCallRequest(
+                    name="list_pet_reminders",
+                    args={"pet_id": pet_id, "status": "pending"},
+                )
+            ),
+            ProviderTurn(reply="这周有一次驱虫待办。"),
+        ]
+    )
+
+    response = client.post(
+        "/api/v1/chat",
+        json={"message": "这周有哪些安排？", "pet_id": pet_id},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["tool_calls"] == [{"name": "list_pet_reminders", "status": "success"}]
+    assert result["reply"] == "这周有一次驱虫待办。"
+
+
 def test_chat_route_returns_pet_not_found_instead_of_internal_error(
     chat_client: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -168,6 +248,8 @@ def test_chat_route_reuses_existing_session(
         message: str,
         requested_pet_id: UUID | None,
         service: PetService,
+        record_service: object = None,
+        reminder_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -207,6 +289,8 @@ def test_chat_route_filters_history_by_session_and_current_pet(
         message: str,
         requested_pet_id: UUID | None,
         service: PetService,
+        record_service: object = None,
+        reminder_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -257,6 +341,8 @@ def test_chat_route_returns_conflict_without_saving_stale_turn(
         message: str,
         requested_pet_id: UUID | None,
         service: PetService,
+        record_service: object = None,
+        reminder_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
@@ -300,6 +386,8 @@ def test_chat_route_serializes_same_session_requests(
         message: str,
         requested_pet_id: UUID | None,
         service: PetService,
+        record_service: object = None,
+        reminder_service: object = None,
         provider: object = None,
         history: list[ChatHistoryMessage] | None = None,
     ) -> ChatReply:
