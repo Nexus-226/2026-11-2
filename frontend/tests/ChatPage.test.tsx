@@ -59,6 +59,27 @@ afterEach(() => {
 });
 
 describe("聊天页面", () => {
+  it("只为助手回复渲染 Markdown，用户输入保持原文", async () => {
+    const user = userEvent.setup();
+    mocks.send.mockResolvedValue({
+      ...response,
+      reply: "**注意事项**\n\n- 避免牛肉\n- 查看配料",
+    });
+    const { container } = render(<ChatPage active onNavigate={vi.fn()} />);
+    await screen.findByRole("option", { name: "豆豆" });
+    await user.type(screen.getByLabelText("输入你的问题"), "**这是我的原文**");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText("注意事项");
+    expect(container.querySelector(".assistant strong")?.textContent).toBe(
+      "注意事项",
+    );
+    expect(container.querySelector(".assistant ul")?.children).toHaveLength(2);
+    expect(container.querySelector(".user .message-bubble")?.textContent).toBe(
+      "**这是我的原文**",
+    );
+    expect(container.querySelector(".user strong")).toBeNull();
+  });
+
   it("发送选中宠物和会话 ID，并显示两轮回复", async () => {
     const user = userEvent.setup();
     mocks.send.mockResolvedValue(response);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { chatClient, usingDemoChat } from "../api/chat";
 import { petClient, usingDemoData } from "../api/pets";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
+import AssistantMessage from "../components/chat/AssistantMessage";
 import type { ChatRequest } from "../types/chat";
 import type { Pet } from "../types/pet";
 
@@ -355,7 +356,13 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
                             ? "演示回复"
                             : "宠物助手"}
                       </span>
-                      <div className="message-bubble">{message.text}</div>
+                      <div className="message-bubble">
+                        {message.role === "assistant" ? (
+                          <AssistantMessage text={message.text} />
+                        ) : (
+                          message.text
+                        )}
+                      </div>
                     </div>
                   </li>
                 ))}
