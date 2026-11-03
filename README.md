@@ -1,13 +1,13 @@
 # Pet Agent
 
-三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），P1-8 演示数据版附近服务已在本 PR 实现，提醒、Agent 查询尚未开始；真实高德接入（P1-9）与地址解析未实现，真实 POI 尚未查通。
+三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），P1-8 演示数据版附近服务后端已在本 PR 实现（页面待 C 集成），提醒、Agent 查询尚未开始；真实高德接入（P1-9）与地址解析未实现，真实 POI 尚未查通。
 
 ## 目录与分工
 
 ```text
 frontend/                     C：React + TypeScript 前端
   src/app/                    入口与应用
-  src/pages/                  已有对话、宠物资料、日常记录和附近服务（演示版）页面；待办/提醒页面待实现
+  src/pages/                  已有对话、宠物资料、日常记录页面；待办/提醒和附近服务页面待实现
   src/components/             chat / map / common 组件
   src/api/ hooks/ types/ styles/
   tests/
@@ -21,7 +21,7 @@ docs/                         架构、接口及技术决策
 scripts/                      开发辅助脚本
 ```
 
-A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1；演示数据版附近服务已实现并明确标注来源，真实高德接入（P1-9）尚未开始，目录预留不代表功能已完成。
+A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1；演示数据版附近服务后端已实现并明确标注来源（页面待 C 集成），真实高德接入（P1-9）尚未开始，目录预留不代表功能已完成。
 
 原始《Pet Agent 架构与开发指南》第 9 节将 A、C 的职责写反；本仓库以当前明确的 **A：Agent、B：后端、C：前端** 分工为准。
 
@@ -37,7 +37,7 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | 后端 | Python + FastAPI + Pydantic | 健康检查、宠物资料 CRUD、统一错误响应、对话路由和会话消息持久化已实现 |
 | Agent | Python Agent 模块、受控工具和 LLM Provider | Runtime、宠物工具、对话编排、Qwen/Mock Provider 已接入；跨请求会话历史传入模型待修复（P0-8） |
 | 数据 | SQLite + SQLAlchemy 2 + Alembic | 本地演示用户与宠物资料通过 SQLite/SQLAlchemy 持久化；Alembic 迁移已配置 |
-| 地图（P1） | 高德开放平台（P1-9）；P1-8 演示版内置种子数据无需 Key | 真实 POI 接入；Key 和配额待准备 |
+| 地图（P1） | 高德开放平台（P1-9）；P1-8 演示版后端内置种子数据无需 Key，页面待 C 集成 | 真实 POI 接入；Key 和配额待准备 |
 
 当前真实模型通过 DashScope 的 OpenAI 兼容接口接入，默认 qwen-plus；可通过现有环境变量配置，Provider 抽象保留。前端锁定的依赖版本见 `frontend/package-lock.json`，详细选型和边界见 [技术栈文档](docs/TECH_STACK.md)。
 
@@ -52,7 +52,7 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | `GET /api/v1/pets/{pet_id}`、`PATCH /api/v1/pets/{pet_id}`、`DELETE /api/v1/pets/{pet_id}` | 查看、修改、删除宠物 | P0，已实现 |
 | `POST /api/v1/chat` | Agent 对话，JSON 回复；有 LLM_API_KEY 使用 Qwen，否则使用 MockProvider | P0，路由与会话存储已实现；模型历史上下文待修复 |
 | `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端正在本 PR 提交；前端页面待实现 |
-| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版已实现；高德接入待 P1-9 |
+| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版后端已实现；页面待 C 集成，高德接入待 P1-9 |
 
 宠物字段、记录/提醒错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。记录/提醒契约已由 A/C 确认；其他 P1 接口约定仍需三人评审。实现时如有变更，同步更新文档和测试。
 
@@ -119,7 +119,7 @@ npm run format -- src/app/App.tsx
 
 `.gitattributes` 让 Git 新检出或重新写入的文本文件使用 LF，即使本机设置了 `core.autocrlf=true`；已有工作区文件不会立即自动转换。请先保存本地改动，再按需用编辑器或对应格式化工具转换涉及的文件。
 
-应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。当前优先完成 P0 联调验收和上下文修复，再推进 P1 记录、提醒与 Agent 查询；附近服务演示版已实现（见下文 P1-8），真实高德接入随后实施。新增功能尚无已实现接口，其契约由 P1-1 另行确认，不在本说明中预设。
+应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。当前优先完成 P0 联调验收和上下文修复，再推进 P1 记录、提醒与 Agent 查询；附近服务演示版后端已实现（见下文 P1-8），页面与真实高德接入随后实施。新增功能尚无已实现接口，其契约由 P1-1 另行确认，不在本说明中预设。
 
 ## P1-3：日常记录页面（C 侧开发）
 
@@ -127,12 +127,12 @@ npm run format -- src/app/App.tsx
 
 设置 `VITE_RECORD_DATA_SOURCE=api` 后重启前端可使用 `/api/v1/records`；关联真实宠物同时设置 `VITE_PET_DATA_SOURCE=api`。接口失败明确显示错误，不自动回退演示数据。此开关不迁移本地记录。真实后端联调依赖 B 的 P1-2；当前不包含提醒创建或 Agent 记录查询。
 
-## P1-8：附近服务演示版（B 侧实现）
+## P1-8：附近服务演示版后端（B 侧实现）
 
-导航“附近服务”支持三类演示地点（宠物医院、宠物美容、宠物用品店）按距离查看，地点列表与示意图联动高亮，全程明确标注数据来源。后端新增：
+本 PR 按评审收敛为后端交付：前端页面由 C 侧单独集成，参考实现保留在分支提交 `465e513`（未运行前端测试与构建，不能据此验收）。后端新增：
 
 - `GET /api/v1/nearby?lat=..&lng=..&type=..&radius_m=..`：高德未接入前按 P1-7 契约回退演示种子数据，返回 `source: "demo"`、`fallback_reason: "amap_not_configured"`，并沿用请求中心计算距离。
 - `GET /api/v1/nearby/demo?type=..&radius_m=..`：用户主动选择的演示区域，使用 `PET_AGENT_DEMO_CENTER_LAT/LNG` 配置的演示中心（未配置时用内置默认值），`search_center.source` 固定为 `demo_region`。
 - `GET /api/v1/places/{place_id}?lat=..&lng=..`：`demo:` 前缀查演示目录；`amap:` 前缀在高德接入前返回 `503 SERVICE_UNAVAILABLE`，不静默替换为演示数据。
 
-前端页面不使用地图 SDK，示意图按查询中心的相对位置绘制；定位仅用于计算距离，拒绝授权时提供显式“使用演示区域”入口。`/locations/resolve` 手动地址解析属 P1-9/P1-10，尚未实现。
+演示地点坐标按相对演示中心的偏移生成，并收敛到 WGS84 合法范围（纬度 [-90, 90]、经度 [-180, 180]），边界配置（如纬度 90、经度 180）不会产生非法坐标。Service 层暂依赖调用方校验坐标、类别与半径（HTTP 路由已校验），P1-11 工具直调 Service 前需与 A 明确校验责任。`/locations/resolve` 手动地址解析属 P1-9/P1-10，尚未实现。

@@ -284,3 +284,44 @@ def test_invalid_demo_center_config_falls_back_to_default(
     assert response.status_code == 200
     body = response.json()
     assert body["search_center"]["location"] == {"lat": 39.9001, "lng": 116.4001}
+
+
+def test_demo_center_at_wgs84_bounds_keeps_seed_coordinates_valid(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PET_AGENT_DEMO_CENTER_LAT", "90")
+    monkeypatch.setenv("PET_AGENT_DEMO_CENTER_LNG", "180")
+    response = client.get(
+        "/api/v1/nearby/demo", params={"type": "pet_store", "radius_m": 20000}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["search_center"]["location"] == {"lat": 90.0, "lng": 180.0}
+    places = get_places(body)
+    assert len(places) == 3
+    for place in places:
+        location = place["location"]
+        assert -90 <= location["lat"] <= 90
+        assert -180 <= location["lng"] <= 180
+    # 偏移越过边界的种子地点收敛到合法边界，而不是产生越界坐标。
+    assert max(place["location"]["lat"] for place in places) == 90.0
+    assert max(place["location"]["lng"] for place in places) == 180.0
+
+
+def test_demo_center_at_negative_wgs84_bounds_keeps_seed_coordinates_valid(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PET_AGENT_DEMO_CENTER_LAT", "-90")
+    monkeypatch.setenv("PET_AGENT_DEMO_CENTER_LNG", "-180")
+    response = client.get(
+        "/api/v1/nearby/demo", params={"type": "pet_grooming", "radius_m": 20000}
+    )
+    assert response.status_code == 200
+    places = get_places(response.json())
+    assert len(places) == 3
+    for place in places:
+        location = place["location"]
+        assert -90 <= location["lat"] <= 90
+        assert -180 <= location["lng"] <= 180
+    # 经度为负偏移的种子地点收敛到 -180，全部坐标保持合法。
+    assert min(place["location"]["lng"] for place in places) == -180.0

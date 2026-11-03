@@ -192,9 +192,14 @@ def spherical_distance_m(from_point: GeoLocation, to_point: GeoLocation) -> int:
 
 
 def _seed_location(seed: DemoPlaceSeed, demo_center: GeoLocation) -> GeoLocation:
+    # 演示中心允许配置到 WGS84 边界（如纬度 90、经度 180）；偏移后必须收敛回
+    # 合法范围（纬度 [-90, 90]、经度 [-180, 180]），保证任何合法配置下
+    # 响应中的地点坐标都不会越界。
+    lat = demo_center.lat + seed.lat_offset
+    lng = demo_center.lng + seed.lng_offset
     return GeoLocation(
-        lat=round(demo_center.lat + seed.lat_offset, 6),
-        lng=round(demo_center.lng + seed.lng_offset, 6),
+        lat=round(max(-90.0, min(90.0, lat)), 6),
+        lng=round(max(-180.0, min(180.0, lng)), 6),
     )
 
 
