@@ -1,4 +1,4 @@
-export type AppPage = "chat" | "pets" | "records";
+export type AppPage = "chat" | "pets" | "records" | "reminders";
 
 interface AppHeaderProps {
   active: AppPage;
@@ -49,6 +49,15 @@ export default function AppHeader({
           onClick={() => onNavigate("records")}
         >
           日常记录
+        </button>
+        <button
+          type="button"
+          className={active === "reminders" ? "nav-item active" : "nav-item"}
+          aria-current={active === "reminders" ? "page" : undefined}
+          disabled={navigationDisabled}
+          onClick={() => onNavigate("reminders")}
+        >
+          待办提醒
         </button>
       </nav>
     </header>
