@@ -182,7 +182,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 ```
 
 - `title` 必填，去除首尾空格后 1–120 字符；`due_on` 必填，为 `Asia/Shanghai` 日历日期，可为过去日期以支持补录逾期事项。
-- `status` 为 `pending`、`completed`、`cancelled` 之一；新建时客户端不得传 `status`，服务端默认创建为 `pending`。响应中的 `due_group` 是非持久化派生字段，由 B 的 Service 按 `Asia/Shanghai` 当前日统一计算，供 HTTP 响应和 A 的 Agent 工具共用：`pending` 项按 `due_on` 分为 `overdue`（早于今天）、`today`（今天）、`upcoming`（明日起至第七日，含）或 `later`（第七日之后）；`completed`/`cancelled` 项为 `null`。字段类型为 `ReminderDueGroup = "overdue" | "today" | "upcoming" | "later" | null`。前端和 Agent 不得各自重新计算该分组。`upcoming` 不是持久化状态。
+- `status` 为 `pending`、`completed`、`cancelled` 之一；新建时客户端不得传 `status`，服务端默认创建为 `pending`。响应中的 `due_group` 是非持久化派生字段，由 B 的 Service 按 `Asia/Shanghai` 当前日统一计算，供 HTTP 响应和 A 的 Agent 工具共用：`pending` 项按 `due_on` 分为 `overdue`（逾期）、`today`（今天）、`upcoming`（即将：明日起至第七日，含）或 `later`（更晚：第七日之后）；`completed`/`cancelled` 项为 `null`。字段类型为 `ReminderDueGroup = "overdue" | "today" | "upcoming" | "later" | null`。前端和 Agent 不得各自重新计算该分组。`upcoming` 不是持久化状态。
 - P1-5 演示问法使用“未来七天有哪些安排”，范围为 `Asia/Shanghai` 今天至第六日（含），以查询时实际起止日期回应，包含今天并避免与派生分组 `upcoming`（明日至第七日）混淆。用户问“这周”时按 `Asia/Shanghai` 自然周（周一至周日，含今天）理解；如对话上下文表明用户可能指滚动七天，则先澄清。Service 支持任意包含首尾日期的 `from_date`/`to_date` 查询，不将自然周与滚动七天混为一谈。
 - `source_record_id` 可空；非空时记录必须存在，且提醒与来源记录的 `pet_id` 必须一致；提醒 `PATCH` 后按更新后的完整对象校验此约束，而非只校验本次提交的字段。来源记录删除时仅清空该字段，不删除提醒。
 - 端点：`GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}`。列表支持 `pet_id`、`unlinked`、`status`、`from_date`、`to_date`（按 `due_on` 过滤）；默认按 `due_on` 正序、`created_at` 正序及 `id` 升序稳定排序。创建返回 `201 Reminder`，读取/修改返回 `200 Reminder`，删除返回 `204`。
