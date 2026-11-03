@@ -1,10 +1,13 @@
-"""附近服务（P1-8 演示数据版）。
+"""附近服务（P1-8 演示数据版；P1-9 高德真实接入）。
 
-当前阶段未接入高德（P1-9 单独提交）：`/api/v1/nearby` 按契约回退到内置
-演示种子数据，沿用请求中的查询中心计算距离并保留查询中心来源；
-`/api/v1/nearby/demo` 使用配置的 WGS84 演示中心。所有演示地点均为虚构
-数据，`data_source` 与 ID 保持 `demo` 前缀，页面与 Agent 必须明确标注
-演示来源，不得描述为实时结果。
+配置 `AMAP_WEB_SERVICE_KEY` 后，`/api/v1/nearby` 通过高德 Web 服务 v5
+查询真实 POI：请求前把 WGS84 转为 GCJ-02，返回的 GCJ-02 坐标转回
+WGS84，按服务端球面距离过滤半径，以 `(distance_m, id)` 稳定排序并按
+高德地点 ID 去重；高德未配置或调用失败时按契约回落演示种子数据，并
+分别以 `fallback_reason` 的 `amap_not_configured`/`amap_unavailable`
+标注，回落时沿用请求中的查询中心与来源。`/api/v1/nearby/demo` 仍使用
+配置的演示中心。所有演示地点均为虚构数据，`data_source` 与 ID 保持
+`demo` 前缀，页面与 Agent 必须明确标注演示来源，不得描述为实时结果。
 """
 
 import logging
@@ -16,6 +19,7 @@ from fastapi import HTTPException
 
 from app.schemas.nearby import (
     BusinessStatus,
+    FallbackReason,
     GeoLocation,
     NearbyCategory,
     NearbyResponse,
@@ -23,6 +27,7 @@ from app.schemas.nearby import (
     RequestCenterSource,
     SearchCenter,
 )
+from app.services.amap import AMapClient, AMapPlace, AMapTimeout, AMapUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,15 @@ DEMO_REGION_LABEL = "演示区域（非实时位置）"
 CENTER_LABELS: dict[str, str] = {
     "user_location": "当前位置",
     "resolved_address": "所选地址",
+}
+
+# P1-9：高德周边搜索按类别使用的关键字（v5 支持多个用“|”分割）。
+# 不使用 POI 分类码：分类码表需人工维护且易错配，关键字对“宠物医院/
+# 宠物美容/宠物用品”这类明确词的召回稳定。
+AMAP_KEYWORDS: dict[NearbyCategory, str] = {
+    "pet_hospital": "宠物医院|动物医院",
+    "pet_grooming": "宠物美容|宠物SPA|宠物洗护",
+    "pet_store": "宠物用品|宠物店",
 }
 
 # 平均地球半径（米），用于 WGS84 球面距离计算。
@@ -237,6 +251,64 @@ def _filter_and_sort(places: list[Place], radius_m: int) -> list[Place]:
     return in_radius
 
 
+def _amap_api_key() -> str:
+    """高德密钥仅由后端读取；留白视为未接入。"""
+    return os.getenv("AMAP_WEB_SERVICE_KEY", "").strip()
+
+
+def _amap_client() -> AMapClient:
+    # 测试通过 monkeypatch 本函数注入带 MockTransport 的客户端。
+    return AMapClient(api_key=_amap_api_key())
+
+
+def _amap_to_place(
+    poi: AMapPlace, category: NearbyCategory, query_center: GeoLocation
+) -> Place:
+    location = GeoLocation(lat=poi.lat, lng=poi.lng)
+    # 高德不提供可靠的营业状态与导航链接，按契约分别置为 unknown/None。
+    return Place(
+        id=f"amap:{poi.poi_id}",
+        name=poi.name,
+        category=category,
+        address=poi.address,
+        phone=poi.phone,
+        location=location,
+        distance_m=spherical_distance_m(query_center, location),
+        business_status="unknown",
+        navigation_url=None,
+        data_source="amap",
+    )
+
+
+def _category_from_amap_type(type_name: str) -> NearbyCategory:
+    """按高德 POI 类型文本归入三类地点；无法识别时归入宠物用品店。"""
+    text = (type_name or "").lower()
+    if any(word in text for word in ("美容", "spa", "洗护", "造型")):
+        return "pet_grooming"
+    if any(word in text for word in ("医院", "诊所", "门诊", "兽医", "动物医疗")):
+        return "pet_hospital"
+    if any(word in text for word in ("商店", "超市", "用品", "门店", "宠物店", "水族")):
+        return "pet_store"
+    return "pet_store"
+
+
+def _demo_fallback(
+    search_center: SearchCenter,
+    category: NearbyCategory,
+    radius_m: int,
+    reason: FallbackReason,
+) -> NearbyResponse:
+    # 演示种子可能离查询中心较远，此处允许 places 为空。
+    return NearbyResponse(
+        places=_filter_and_sort(
+            _places_for_category(category, search_center.location), radius_m
+        ),
+        search_center=search_center,
+        source="demo",
+        fallback_reason=reason,
+    )
+
+
 def search_nearby(
     *,
     lat: float,
@@ -246,18 +318,32 @@ def search_nearby(
     center_source: RequestCenterSource,
 ) -> NearbyResponse:
     query_center = GeoLocation(lat=lat, lng=lng)
-    # P1-8：高德适配器尚未接入（P1-9 单独提交），按契约回退演示种子数据：
-    # 沿用原查询中心计算距离、保留请求中的查询中心来源，不切换到演示中心。
-    # 演示种子可能离查询中心较远，此处允许 places 为空。
+    search_center = SearchCenter(
+        location=query_center,
+        source=center_source,
+        label=CENTER_LABELS.get(center_source, "当前位置"),
+    )
+    if not _amap_api_key():
+        # 未配置高德：沿用原查询中心回落演示种子数据。
+        return _demo_fallback(search_center, category, radius_m, "amap_not_configured")
+    try:
+        pois = _amap_client().search_around(
+            lat=lat, lng=lng, keywords=AMAP_KEYWORDS[category], radius_m=radius_m
+        )
+    except (AMapTimeout, AMapUnavailable) as exc:
+        # 高德不可用：按契约回落演示数据并标注，不切换查询中心。
+        logger.warning("附近查询高德失败，回落演示数据：%s", exc)
+        return _demo_fallback(search_center, category, radius_m, "amap_unavailable")
+    # 去重：同一高德地点 ID 只保留首个；距离过滤与稳定排序由服务端负责。
+    deduped: dict[str, Place] = {}
+    for poi in pois:
+        place = _amap_to_place(poi, category, query_center)
+        deduped.setdefault(place.id, place)
     return NearbyResponse(
-        places=_filter_and_sort(_places_for_category(category, query_center), radius_m),
-        search_center=SearchCenter(
-            location=query_center,
-            source=center_source,
-            label=CENTER_LABELS.get(center_source, "当前位置"),
-        ),
-        source="demo",
-        fallback_reason="amap_not_configured",
+        places=_filter_and_sort(list(deduped.values()), radius_m),
+        search_center=search_center,
+        source="amap",
+        fallback_reason=None,
     )
 
 
@@ -285,9 +371,22 @@ def _place_not_found() -> HTTPException:
 
 
 def get_place(place_id: str, *, lat: float, lng: float) -> Place:
-    """按 ID 来源查询：`demo:` 只查演示目录，`amap:` 不回退演示数据。"""
+    """按 ID 来源查询：`demo:` 只查演示目录，`amap:` 只查高德，互不回退。"""
+    query_center = GeoLocation(lat=lat, lng=lng)
     if place_id.startswith("amap:"):
-        # P1-9 接入高德前，真实地点详情不可用；不静默替换成演示地点。
+        return _amap_place_detail(place_id[len("amap:") :], query_center)
+    if not place_id.startswith("demo:"):
+        raise _place_not_found()
+    key = place_id[len("demo:") :]
+    seed = next((item for item in DEMO_PLACE_SEEDS if item.key == key), None)
+    if seed is None:
+        raise _place_not_found()
+    return _to_place(seed, _seed_location(seed, get_demo_center()), query_center)
+
+
+def _amap_place_detail(poi_id: str, query_center: GeoLocation) -> Place:
+    """高德地点详情：未配置 503、超时 504、失败 502、不存在 404。"""
+    if not _amap_api_key():
         raise HTTPException(
             status_code=503,
             detail={
@@ -296,11 +395,28 @@ def get_place(place_id: str, *, lat: float, lng: float) -> Place:
                 "retryable": False,
             },
         )
-    if not place_id.startswith("demo:"):
+    try:
+        poi = _amap_client().get_detail(poi_id)
+    except AMapTimeout as exc:
+        logger.warning("高德地点详情超时：%s", exc)
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "code": "UPSTREAM_TIMEOUT",
+                "message": "高德服务响应超时",
+                "retryable": True,
+            },
+        ) from exc
+    except AMapUnavailable as exc:
+        logger.warning("高德地点详情失败：%s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "UPSTREAM_ERROR",
+                "message": "高德服务暂时不可用",
+                "retryable": True,
+            },
+        ) from exc
+    if poi is None:
         raise _place_not_found()
-    key = place_id[len("demo:") :]
-    seed = next((item for item in DEMO_PLACE_SEEDS if item.key == key), None)
-    if seed is None:
-        raise _place_not_found()
-    query_center = GeoLocation(lat=lat, lng=lng)
-    return _to_place(seed, _seed_location(seed, get_demo_center()), query_center)
+    return _amap_to_place(poi, _category_from_amap_type(poi.type_name), query_center)
