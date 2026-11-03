@@ -1,5 +1,5 @@
 from datetime import date, datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.agent.chat import MAX_HISTORY_CHARS, MAX_HISTORY_MESSAGES, run_chat
 from app.agent.providers.base import ProviderTurn
@@ -199,6 +199,39 @@ def test_run_chat_passes_history_only_on_first_turn() -> None:
 
     assert provider.history_per_call[0] == history
     assert provider.history_per_call[1] is None
+
+
+def test_run_chat_filters_history_from_other_pets() -> None:
+    provider = HistoryCapturingProvider()
+    other_pet = uuid4()
+    history = [
+        ChatHistoryMessage(role="user", content="豆豆的问题", pet_id=PET_ID),
+        ChatHistoryMessage(role="assistant", content="豆豆的回答", pet_id=PET_ID),
+        ChatHistoryMessage(role="user", content="另一只宠物的问题", pet_id=other_pet),
+        ChatHistoryMessage(
+            role="assistant", content="另一只宠物的回答", pet_id=other_pet
+        ),
+    ]
+
+    run_chat(
+        "继续", PET_ID, FakePetService([_pet()]), provider=provider, history=history
+    )
+
+    assert provider.history is not None
+    assert [item.content for item in provider.history] == ["豆豆的问题", "豆豆的回答"]
+
+
+def test_run_chat_keeps_history_when_no_current_pet() -> None:
+    provider = HistoryCapturingProvider()
+    history = [
+        ChatHistoryMessage(role="user", content="豆豆的问题", pet_id=PET_ID),
+        ChatHistoryMessage(role="assistant", content="豆豆的回答", pet_id=PET_ID),
+    ]
+
+    run_chat("继续", None, FakePetService([_pet()]), provider=provider, history=history)
+
+    assert provider.history is not None
+    assert len(provider.history) == 2
 
 
 def test_run_chat_drops_over_budget_single_round() -> None:

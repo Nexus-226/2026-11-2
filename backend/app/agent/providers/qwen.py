@@ -114,7 +114,9 @@ class QwenProvider:
             self._pending_tool_call_id = call_id
             return ProviderTurn(tool_call=ToolCallRequest(name=name, args=args))
 
-        content = message.get("content") or ""
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise ProviderError("UPSTREAM_ERROR", "模型返回空回复")
         self._messages.append({"role": "assistant", "content": content})
         return ProviderTurn(reply=content)
 

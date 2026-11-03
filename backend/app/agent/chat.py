@@ -44,9 +44,18 @@ class ChatReply(BaseModel):
 
 def _select_history(
     history: list[ChatHistoryMessage] | None,
+    pet_id: UUID | None,
 ) -> list[ChatHistoryMessage]:
-    """取最近若干完整轮次，并限制总字符数；不保留半轮消息。"""
-    messages = [item for item in history or [] if item.content.strip()]
+    """取最近若干完整轮次，并限制总字符数；不保留半轮消息。
+
+    当前请求关联了宠物时，丢弃属于其他宠物的历史，避免旧宠物事实混入本轮。
+    """
+    messages = [
+        item
+        for item in history or []
+        if item.content.strip()
+        and (pet_id is None or item.pet_id is None or item.pet_id == pet_id)
+    ]
     if not messages:
         return []
 
@@ -82,7 +91,7 @@ def run_chat(
     runtime = AgentRuntime(registry, max_tool_calls=max_tool_calls)
     provider = provider or build_default_provider()
     tools = [registry.get(name) for name in registry.names()]
-    selected_history = _select_history(history)
+    selected_history = _select_history(history, pet_id)
 
     system = SYSTEM_PROMPT + f" 今天是 {date.today().isoformat()}。"
     if pet_id is not None:
