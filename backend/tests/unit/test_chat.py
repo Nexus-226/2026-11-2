@@ -178,6 +178,7 @@ def test_run_chat_prompt_references_other_species() -> None:
     )
     prompt = captured["system_prompt"]
     assert "other_species" in prompt
+    assert "未填具体物种" in prompt
     assert "不要默认按猫狗处理" in prompt
     assert "不要编造具体物种" in prompt
 
