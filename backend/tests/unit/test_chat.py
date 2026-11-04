@@ -162,6 +162,26 @@ def test_run_chat_prompt_distinguishes_name_and_nickname() -> None:
     assert "不得额外声称档案名称" in captured["system_prompt"]
 
 
+def test_run_chat_prompt_references_other_species() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "我的宠物是什么物种？",
+        None,
+        FakePetService([]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "other_species" in prompt
+    assert "不要默认按猫狗处理" in prompt
+    assert "不要编造具体物种" in prompt
+
+
 def test_run_chat_prompt_limits_nearby_demo_fallback() -> None:
     captured: dict[str, str] = {}
 

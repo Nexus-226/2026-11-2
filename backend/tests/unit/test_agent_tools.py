@@ -1,6 +1,8 @@
 from datetime import date, datetime, timezone
 from uuid import UUID
 
+import pytest
+
 from app.agent.runtime import AgentRuntime
 from app.agent.schemas import ToolCallRequest
 from app.agent.tools import build_default_registry
@@ -85,3 +87,41 @@ def test_runtime_enforces_max_tool_calls() -> None:
     calls = [ToolCallRequest(name="list_pets", args={}) for _ in range(5)]
     results = runtime.run_tools(calls)
     assert len(results) == 3  # 超出上限的部分被丢弃，不执行
+
+
+def test_pet_tool_descriptions_mention_other_species() -> None:
+    registry = build_default_registry(FakePetService([]))
+    assert "other_species" in registry.get("get_pet_profile").description
+    assert "other_species" in registry.get("list_pets").description
+
+
+requires_other_species = pytest.mark.skipif(
+    "other_species" not in PetRead.model_fields,
+    reason="待 B 在 PetRead 增加 other_species 字段后启用",
+)
+
+
+@requires_other_species
+def test_pet_tools_expose_other_species_for_other_pet() -> None:
+    """P2-1：other 宠物的具体物种 other_species 经工具原样透传。"""
+    pet = _pet(species="other", other_species="兔")
+    runtime = AgentRuntime(build_default_registry(FakePetService([pet])))
+    result = runtime.run_tools(
+        [ToolCallRequest(name="get_pet_profile", args={"pet_id": str(PET_ID)})]
+    )[0]
+    assert result.status == "success"
+    assert result.data.other_species == "兔"
+    assert result.data.model_dump(mode="json")["other_species"] == "兔"
+
+
+@requires_other_species
+def test_pet_tools_serialize_other_species_null_for_dog() -> None:
+    """P2-1：dog/cat 的 other_species 恒为 null，序列化后仍为 null。"""
+    pet = _pet(species="dog", other_species=None)
+    runtime = AgentRuntime(build_default_registry(FakePetService([pet])))
+    result = runtime.run_tools(
+        [ToolCallRequest(name="get_pet_profile", args={"pet_id": str(PET_ID)})]
+    )[0]
+    assert result.status == "success"
+    assert result.data.other_species is None
+    assert result.data.model_dump(mode="json")["other_species"] is None
