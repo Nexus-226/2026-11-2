@@ -829,3 +829,66 @@ def test_resolve_poi_timeout_returns_504_even_if_geocode_succeeds(
     response = resolve(client)
     assert response.status_code == 504
     assert response.json()["error"]["code"] == "UPSTREAM_TIMEOUT"
+
+
+def test_resolve_geocode_failure_returns_502_and_discards_poi_results(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POI 成功但随后 geocode 失败 → 整体 502，已取得的 POI 候选不返回。
+
+    与「POI 先失败 fail-fast」属同一 try 块的另一个失败分支：
+    第二路（geocode）失败同样不降级为 POI-only 结果（A 评审建议补测）。
+    """
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        amap_transport(
+            requests,
+            geocode_payload={
+                "status": "0",
+                "info": "INVALID_USER_KEY",
+                "infocode": "10001",
+            },
+            text_payload=poi_ok_body(
+                [
+                    poi_item(
+                        "B00157917M", "上海人民广场", gcj_lat=31.2288, gcj_lng=121.4752
+                    )
+                ]
+            ),
+        ),
+    )
+    response = resolve(client, "人民广场")
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "UPSTREAM_ERROR"
+    # 两路都已发起（串行：text 先、geocode 后），失败发生在第二路。
+    assert len(requests) == 2
+
+
+def test_resolve_geocode_timeout_returns_504_and_discards_poi_results(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POI 成功但 geocode 超时 → 整体 504，不返回已有 POI 候选。
+
+    HTTPX 5 秒为阶段超时而非请求总时限；本测试只断言错误分类，
+    不对端到端耗时作任何保证（前端 15 秒仅是停止等待上限）。
+    """
+    requests: list[httpx.Request] = []
+    patch_client(
+        monkeypatch,
+        amap_transport(
+            requests,
+            geocode_payload=httpx.ConnectTimeout("连接超时"),
+            text_payload=poi_ok_body(
+                [
+                    poi_item(
+                        "B00157917M", "上海人民广场", gcj_lat=31.2288, gcj_lng=121.4752
+                    )
+                ]
+            ),
+        ),
+    )
+    response = resolve(client, "人民广场")
+    assert response.status_code == 504
+    assert response.json()["error"]["code"] == "UPSTREAM_TIMEOUT"
+    assert len(requests) == 2
