@@ -162,3 +162,87 @@ def test_run_chat_without_services_does_not_register_p1_tools() -> None:
         provider=provider,
     )
     assert reply.tool_calls[0].status == "error"
+
+
+class RecordingRecordService:
+    """记录 run_chat 转发给 Service 的参数，用于精确核对 from_date/to_date。"""
+
+    def __init__(self, records: list[RecordRead] | None = None) -> None:
+        self._records = list(records or [])
+        self.calls: list[dict[str, object]] = []
+
+    def list_records(self, **kwargs: object) -> list[RecordRead]:
+        self.calls.append(kwargs)
+        return self._records
+
+
+class RecordingReminderService:
+    """记录 run_chat 转发给 Service 的参数，用于精确核对 from_date/to_date。"""
+
+    def __init__(self, reminders: list[ReminderRead] | None = None) -> None:
+        self._reminders = list(reminders or [])
+        self.calls: list[dict[str, object]] = []
+
+    def list_reminders(self, **kwargs: object) -> list[ReminderRead]:
+        self.calls.append(kwargs)
+        return self._reminders
+
+
+def test_run_chat_forwards_record_date_range_to_service() -> None:
+    service = RecordingRecordService([_record()])
+    provider = MockProvider(
+        turns=[
+            ProviderTurn(
+                tool_call=ToolCallRequest(
+                    name="list_pet_records",
+                    args={
+                        "record_type": "deworming",
+                        "from_date": "2026-11-03",
+                        "to_date": "2026-11-09",
+                    },
+                )
+            ),
+            ProviderTurn(reply="2026-11-03 至 2026-11-09 有一次驱虫记录。"),
+        ]
+    )
+    run_chat(
+        "未来七天有驱虫记录吗？",
+        PET_ID,
+        FakePetService(),
+        record_service=service,
+        provider=provider,
+    )
+    assert service.calls[0]["from_date"] == date(2026, 11, 3)
+    assert service.calls[0]["to_date"] == date(2026, 11, 9)
+    assert service.calls[0]["record_type"] == "deworming"
+    assert service.calls[0]["pet_id"] == PET_ID
+
+
+def test_run_chat_forwards_reminder_date_range_to_service() -> None:
+    service = RecordingReminderService([_reminder()])
+    provider = MockProvider(
+        turns=[
+            ProviderTurn(
+                tool_call=ToolCallRequest(
+                    name="list_pet_reminders",
+                    args={
+                        "status": "pending",
+                        "from_date": "2026-11-03",
+                        "to_date": "2026-11-09",
+                    },
+                )
+            ),
+            ProviderTurn(reply="未来七天（2026-11-03 至 2026-11-09）有一次待办。"),
+        ]
+    )
+    run_chat(
+        "未来七天有哪些安排？",
+        PET_ID,
+        FakePetService(),
+        reminder_service=service,
+        provider=provider,
+    )
+    assert service.calls[0]["from_date"] == date(2026, 11, 3)
+    assert service.calls[0]["to_date"] == date(2026, 11, 9)
+    assert service.calls[0]["status"] == "pending"
+    assert service.calls[0]["pet_id"] == PET_ID
