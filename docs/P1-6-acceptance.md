@@ -40,6 +40,17 @@
 2. **直接用后端 due_group，不重算**：Q2 答案按 due_group 呈现——pending 项「今天/即将」（对应 today/upcoming），completed 项「已完成」（due_group=null 未按 pending 桶分组）；模型读后端 status/due_group，未重算分组。
 3. **来源记录改归属 409 且原记录不变**：B 服务测试 `test_records.py:369/381` 断言 RECORD_IN_USE；HTTP 联调确认 409 后整条记录 name/pet_id 不变、随后 GET 仍返回原记录。
 
+## B 评审结论（2026-11-04）
+
+B 侧复核确认（基线 `056eb69e`，后端 200 passed 全绿），5 项均与契约一致、无缺陷、无需 C 复测：
+1. 409 RECORD_IN_USE 原子性（归属变更检查在任何字段写入之前，`record_service.py:103-113`；`test_records.py:346-381`）。
+2. 状态机终态（非 pending 变更一律 422；同状态重复 PATCH 幂等短路；完成不生成记录）。
+3. 删除来源清引用（同事务 `SET source_record_id=NULL` 再删记录，FK ondelete 兜底）。
+4. due_group（Asia/Shanghai，overdue/today/upcoming/later，终态 null；与「未来七天」查询窗口为两个不同口径，符合契约）。
+5. 重启持久化（实体经仓储落库，无内存态）。
+
+B 结论：待 A 确认两项措辞待办后即可合并。
+
 ## A 评审结论（2026-11-04）
 
 A 认可 C 侧硬性验收项通过：多宠物隔离、空数据、改删记录→当前结果、取消/完成、重启持久化、测试与构建。未验证项处理：查询失败以单测代替可接受（A 提醒确认单测覆盖「工具 error → 模型说『暂时无法查询』」这一层，而非只测 error 状态）；迟到响应属 P0-8 已验收，记为残余风险。
