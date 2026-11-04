@@ -55,9 +55,14 @@ AddressResolveSource = Literal["amap"]
 
 
 class AddressResolveRequest(BaseModel):
-    """手动地址解析请求；契约要求首尾空白去除后长度为 1–200。"""
+    """手动地址解析请求；address 1–200，city 可选 1–20（均去首尾空白）。
+
+    `city` 提供时限定解析城市（前端未填写时按全国搜索说明），不使用
+    未授权定位或模型内部知识猜测城市。
+    """
 
     address: str
+    city: str | None = None
 
     @field_validator("address")
     @classmethod
@@ -67,11 +72,31 @@ class AddressResolveRequest(BaseModel):
             raise ValueError("地址长度需为 1–200 个字符")
         return text
 
+    @field_validator("city")
+    @classmethod
+    def _validate_city(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        text = value.strip()
+        if not 1 <= len(text) <= 20:
+            raise ValueError("城市长度需为 1–20 个字符")
+        return text
+
 
 class AddressMatch(BaseModel):
-    """地址解析候选；按契约仅包含地址文本、WGS84 坐标与数据来源。"""
+    """地址解析候选；`match_kind` 区分地标 POI 与 geocode 来源。
+
+    name/city/district/level 字段恒存在但值可为 null：geocode 候选
+    `name` 为 null，POI 候选 `level` 为 null；`level` 为 geocode 的
+    高德级别原文（门址/道路/省等），仅作展示精度，不作过滤依据。
+    """
 
     formatted_address: str
+    name: str | None
+    city: str | None
+    district: str | None
+    level: str | None
+    match_kind: Literal["poi", "geocode"]
     location: GeoLocation
     data_source: AddressResolveSource
 

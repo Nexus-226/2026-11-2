@@ -10,5 +10,5 @@ router = APIRouter()
 
 @router.post("/resolve", response_model=AddressResolveResponse)
 def resolve_address(payload: AddressResolveRequest) -> AddressResolveResponse:
-    """把地址解析为 WGS84 候选；多条候选全部返回，由用户选择。"""
-    return nearby_service.resolve_address(payload.address)
+    """把地址解析为候选（地标 POI + geocode）；由用户选择，不自动选取。"""
+    return nearby_service.resolve_address(payload.address, payload.city)

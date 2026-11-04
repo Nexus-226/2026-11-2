@@ -1,4 +1,4 @@
-"""附近服务（P1-8 演示数据版；P1-9 高德真实接入）。
+"""附近服务（P1-8 演示数据版；P1-9 高德真实接入；P1-10 地址解析双查）。
 
 配置 `AMAP_WEB_SERVICE_KEY` 后，`/api/v1/nearby` 通过高德 Web 服务 v5
 查询真实 POI：请求前把 WGS84 转为 GCJ-02，返回的 GCJ-02 坐标转回
@@ -6,8 +6,10 @@ WGS84，按服务端球面距离过滤半径，以 `(distance_m, id)` 稳定排�
 高德地点 ID 去重；高德未配置或调用失败时按契约回落演示种子数据，并
 分别以 `fallback_reason` 的 `amap_not_configured`/`amap_unavailable`
 标注，回落时沿用请求中的查询中心与来源。`/api/v1/nearby/demo` 仍使用
-配置的演示中心。所有演示地点均为虚构数据，`data_source` 与 ID 保持
-`demo` 前缀，页面与 Agent 必须明确标注演示来源，不得描述为实时结果。
+配置的演示中心。`/api/v1/locations/resolve` 按契约串行双查 v5
+`place/text` 与 v3 `geocode/geo` 合并候选，不做演示回退。所有演示
+地点均为虚构数据，`data_source` 与 ID 保持 `demo` 前缀，页面与 Agent
+必须明确标注演示来源，不得描述为实时结果。
 """
 
 import logging
@@ -29,7 +31,14 @@ from app.schemas.nearby import (
     RequestCenterSource,
     SearchCenter,
 )
-from app.services.amap import AMapClient, AMapPlace, AMapTimeout, AMapUnavailable
+from app.services.amap import (
+    AMapClient,
+    AMapGeocodeMatch,
+    AMapLandmarkCandidate,
+    AMapPlace,
+    AMapTimeout,
+    AMapUnavailable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +57,12 @@ AMAP_KEYWORDS: dict[NearbyCategory, str] = {
     "pet_grooming": "宠物美容|宠物SPA|宠物洗护",
     "pet_store": "宠物用品|宠物店",
 }
+
+# P1-10（契约冻结稿，Issue #62）：地址解析候选上限与“门址级”geocode
+# 级别。门址/门牌号级候选最可信，排最前；其余 level（道路/省/兴趣点
+# 等）殿后，POI 足够多时会被上限自然截断（不为两路保留名额）。
+RESOLVE_MAX_MATCHES = 5
+RESOLVE_DOOR_LEVELS = frozenset({"门址", "门牌号"})
 
 # 平均地球半径（米），用于 WGS84 球面距离计算。
 EARTH_RADIUS_M = 6371008.8
@@ -426,13 +441,75 @@ def _amap_place_detail(poi_id: str, query_center: GeoLocation) -> Place:
     return _amap_to_place(poi, _category_from_amap_type(poi.type_name), query_center)
 
 
-def resolve_address(address: str) -> AddressResolveResponse:
-    """手动地址解析（P1-10）：地址文本 → WGS84 候选。
+def _dedupe_landmarks(
+    landmarks: list[AMapLandmarkCandidate],
+) -> list[AMapLandmarkCandidate]:
+    """POI 候选去重：同名同省市区同详细地址只保留首个（契约 #62）。"""
+    seen: set[tuple[str, str | None, str | None, str]] = set()
+    unique: list[AMapLandmarkCandidate] = []
+    for landmark in landmarks:
+        key = (landmark.name, landmark.city, landmark.district, landmark.address)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(landmark)
+    return unique
 
-    按契约不做演示回退：未配置高德返回 503，上游失败/超时返回
-    502/504，无匹配返回 404；不根据字符串猜测坐标。地址与坐标仅用于
-    本次请求，不写入日志或业务数据库，因此本函数与适配器日志均不含
-    地址内容。
+
+def _dedupe_geocode_matches(
+    matches: list[AMapGeocodeMatch],
+) -> list[AMapGeocodeMatch]:
+    """geocode 候选去重：formatted_address 相同只保留首个。"""
+    seen: set[str] = set()
+    unique: list[AMapGeocodeMatch] = []
+    for match in matches:
+        if match.formatted_address in seen:
+            continue
+        seen.add(match.formatted_address)
+        unique.append(match)
+    return unique
+
+
+def _poi_match(landmark: AMapLandmarkCandidate) -> AddressMatch:
+    """地标候选 → 对外 AddressMatch；不透出 poi_id 等厂商字段。"""
+    return AddressMatch(
+        formatted_address=landmark.formatted_address,
+        name=landmark.name,
+        city=landmark.city,
+        district=landmark.district,
+        level=None,
+        match_kind="poi",
+        location=GeoLocation(lat=landmark.lat, lng=landmark.lng),
+        data_source="amap",
+    )
+
+
+def _geocode_match(match: AMapGeocodeMatch) -> AddressMatch:
+    """geocode 候选 → 对外 AddressMatch；name 为 null，level 为原文。"""
+    return AddressMatch(
+        formatted_address=match.formatted_address,
+        name=None,
+        city=match.city,
+        district=match.district,
+        level=match.level,
+        match_kind="geocode",
+        location=GeoLocation(lat=match.lat, lng=match.lng),
+        data_source="amap",
+    )
+
+
+def resolve_address(address: str, city: str | None = None) -> AddressResolveResponse:
+    """手动地址解析（P1-10）：地址文本 → 地标 POI 与 geocode 双查候选。
+
+    契约（Issue #62 冻结稿）：串行双查 v5 `place/text` 与 v3
+    `geocode/geo`（`city` 可选，提供时 v5 附带 `citylimit=true`），
+    任一路失败/超时即整体 502/504，不静默降级为另一路结果。候选按
+    「geocode 门址/门牌号 → POI（高德返回序）→ 其余 geocode」排序，
+    两路分别去重后合并上限 5 条；两路均无匹配才返回 404。不根据
+    字符串猜测坐标；地址与坐标仅用于本次请求，不写入日志或业务
+    数据库，因此本函数与适配器日志均不含地址内容。HTTPX 连接、
+    读写及连接池等待的阶段超时为 5 秒，不是整个请求的总时限；
+    串行双查不保证 10 秒内结束。先失败先返回，前端等待上限为 15 秒。
     """
     if not _amap_api_key():
         raise HTTPException(
@@ -445,7 +522,8 @@ def resolve_address(address: str) -> AddressResolveResponse:
         )
     try:
         with _amap_client() as client:
-            matches = client.geocode(address)
+            landmarks = client.search_text(address, city)
+            geocodes = client.geocode(address, city)
     except AMapTimeout as exc:
         logger.warning("地址解析高德超时：%s", exc)
         raise HTTPException(
@@ -466,6 +544,20 @@ def resolve_address(address: str) -> AddressResolveResponse:
                 "retryable": True,
             },
         ) from exc
+
+    poi_matches = [_poi_match(item) for item in _dedupe_landmarks(landmarks)]
+    geocode_candidates = _dedupe_geocode_matches(geocodes)
+    door_level_matches = [
+        _geocode_match(match)
+        for match in geocode_candidates
+        if match.level in RESOLVE_DOOR_LEVELS
+    ]
+    other_geocode_matches = [
+        _geocode_match(match)
+        for match in geocode_candidates
+        if match.level not in RESOLVE_DOOR_LEVELS
+    ]
+    matches = door_level_matches + poi_matches + other_geocode_matches
     if not matches:
         raise HTTPException(
             status_code=404,
@@ -475,16 +567,7 @@ def resolve_address(address: str) -> AddressResolveResponse:
                 "retryable": False,
             },
         )
-    return AddressResolveResponse(
-        matches=[
-            AddressMatch(
-                formatted_address=match.formatted_address,
-                location=GeoLocation(lat=match.lat, lng=match.lng),
-                data_source="amap",
-            )
-            for match in matches
-        ]
-    )
+    return AddressResolveResponse(matches=matches[:RESOLVE_MAX_MATCHES])
 
 
 class BoundNearbyService:

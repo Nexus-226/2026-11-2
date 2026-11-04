@@ -1,4 +1,4 @@
-"""P1-9 高德接入测试：全部使用 MockTransport 模拟响应，不访问真实高德。"""
+"""P1-9/P1-10 高德接入测试：全部使用 MockTransport 模拟响应，不访问真实高德。"""
 
 import logging
 from collections.abc import Iterator
@@ -15,8 +15,11 @@ from app.main import app
 from app.services import nearby_service
 from app.services.amap import (
     AMapClient,
+    AMapLandmarkCandidate,
+    AMapTimeout,
     AMapUnavailable,
     _parse_geocodes,
+    _parse_landmarks,
     gcj02_to_wgs84,
     wgs84_to_gcj02,
 )
@@ -604,3 +607,199 @@ def test_amap_client_closes_after_detail_failure(
     assert response.status_code == 502
     assert response.json()["error"]["code"] == "UPSTREAM_ERROR"
     assert closed == [True]
+
+
+def landmark(
+    poi_id: str = "B00157917M",
+    name: str = "上海人民广场",
+    *,
+    gcj_lat: float = 31.228827,
+    gcj_lng: float = 121.475213,
+    address: str = "人民大道185号",
+    pname: str = "上海市",
+    cityname: str = "上海市",
+    adname: str = "黄浦区",
+    type_name: str = "风景名胜;公园广场;城市广场",
+) -> dict[str, object]:
+    """v5 place/text 原始 POI 形状（按真实响应采样）。"""
+    return {
+        "id": poi_id,
+        "name": name,
+        "location": f"{gcj_lng},{gcj_lat}",
+        "type": type_name,
+        "typecode": "110105",
+        "pname": pname,
+        "cityname": cityname,
+        "adname": adname,
+        "address": address,
+        "parent": "",
+        "distance": "",
+    }
+
+
+def test_search_text_sends_keywords_city_citylimit_and_maps_candidates() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=ok_body([landmark()]))
+
+    client = AMapClient(api_key=TEST_KEY, transport=httpx.MockTransport(handler))
+    with client:
+        candidates = client.search_text("人民广场", "上海市")
+    assert [request.url.path for request in requests] == ["/v5/place/text"]
+    params = dict(requests[0].url.params)
+    assert params["key"] == TEST_KEY
+    assert params["keywords"] == "人民广场"
+    assert params["city"] == "上海市"
+    assert params["citylimit"] == "true"
+    assert params["page_size"] == "25"
+    assert params["page_num"] == "1"
+    assert params["show_fields"] == "business"
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert isinstance(candidate, AMapLandmarkCandidate)
+    assert candidate.poi_id == "B00157917M"
+    assert candidate.name == "上海人民广场"
+    assert candidate.city == "上海市"
+    assert candidate.district == "黄浦区"
+    assert candidate.address == "人民大道185号"
+    assert candidate.type_name == "风景名胜;公园广场;城市广场"
+    assert candidate.formatted_address == "上海市黄浦区人民大道185号"
+    # 坐标已转回 WGS84：与 GCJ-02 输入不同且偏差有限。
+    assert 1e-6 < abs(candidate.lat - 31.228827) < 0.02
+    assert 1e-6 < abs(candidate.lng - 121.475213) < 0.02
+
+
+def test_search_text_without_city_omits_city_params() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=ok_body([]))
+
+    client = AMapClient(api_key=TEST_KEY, transport=httpx.MockTransport(handler))
+    with client:
+        assert client.search_text("人民广场") == []
+    params = dict(requests[0].url.params)
+    assert "city" not in params
+    assert "citylimit" not in params
+
+
+def test_search_text_failed_status_raises_unavailable() -> None:
+    client = AMapClient(
+        api_key=TEST_KEY,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json=failed_body())
+        ),
+    )
+    with client, pytest.raises(AMapUnavailable):
+        client.search_text("人民广场")
+
+
+def test_search_text_timeout_raises_timeout() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("读取超时")
+
+    client = AMapClient(api_key=TEST_KEY, transport=httpx.MockTransport(handler))
+    with client, pytest.raises(AMapTimeout):
+        client.search_text("人民广场")
+
+
+def test_parse_landmarks_requires_pois_array() -> None:
+    """pois 缺失或非数组是上游结构异常，不能伪装成无匹配。"""
+    with pytest.raises(AMapUnavailable):
+        _parse_landmarks({"status": "1", "info": "OK", "infocode": "10000"})
+    with pytest.raises(AMapUnavailable):
+        _parse_landmarks(
+            {"status": "1", "info": "OK", "infocode": "10000", "pois": "x"}
+        )
+
+
+def test_parse_landmarks_skips_invalid_entries() -> None:
+    candidates = _parse_landmarks(
+        ok_body(
+            [
+                "not-a-dict",
+                {"id": "  ", "name": "无名", "location": "121.47,31.22"},
+                {"id": "B0AAA1", "name": "  ", "location": "121.47,31.22"},
+                {"id": "B0AAA1", "name": "无坐标", "location": "not-coords"},
+                landmark(),
+            ]
+        )
+    )
+    assert [candidate.poi_id for candidate in candidates] == ["B00157917M"]
+
+
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        ("人民大道185号", "上海市黄浦区人民大道185号"),
+        ("上海市黄浦区人民大道185号", "上海市黄浦区人民大道185号"),
+        ("黄浦区人民大道185号", "上海市黄浦区人民大道185号"),
+        ("黄浦区", "上海市黄浦区"),
+        ("", "上海市黄浦区"),
+        ("上海路18号", "上海市黄浦区上海路18号"),
+        ("区府路18号", "上海市黄浦区区府路18号"),
+    ],
+)
+def test_parse_landmark_merges_address_prefix(address: str, expected: str) -> None:
+    candidate = _parse_landmarks(ok_body([landmark(address=address)]))[0]
+    assert candidate.formatted_address == expected
+
+
+def test_parse_landmark_joins_address_segments_without_duplicates() -> None:
+    # 直辖市省市区同名重复段去重；详细地址若重复行政区段不再叠加。
+    candidate = _parse_landmarks(ok_body([landmark(address="黄浦区")]))[0]
+    assert candidate.formatted_address == "上海市黄浦区"
+    # 全部区段缺失时回退 POI 名称；city 回退省名。
+    fallback = _parse_landmarks(
+        ok_body(
+            [
+                landmark(
+                    poi_id="B0FFF1",
+                    name="无名广场",
+                    pname="",
+                    cityname="",
+                    adname="",
+                    address="",
+                )
+            ]
+        )
+    )[0]
+    assert fallback.formatted_address == "无名广场"
+    assert fallback.city is None
+    assert fallback.district is None
+
+
+def test_parse_geocodes_extracts_level_city_district() -> None:
+    matches = _parse_geocodes(
+        {
+            "status": "1",
+            "geocodes": [
+                {
+                    "formatted_address": "上海市黄浦区人民大道185号",
+                    "location": "121.472874,31.242028",
+                    "level": "门址",
+                    "city": "上海市",
+                    "district": "黄浦区",
+                },
+                {
+                    # 高德把无区县字段返回为 []：收敛为 None，不透出数组。
+                    "formatted_address": "上海市",
+                    "location": "121.473701,31.230416",
+                    "level": "省",
+                    "city": [],
+                    "district": [],
+                },
+                {"formatted_address": "缺失级别", "location": "116.4050,39.9045"},
+            ],
+        }
+    )
+    assert matches[0].level == "门址"
+    assert matches[0].city == "上海市"
+    assert matches[0].district == "黄浦区"
+    assert matches[1].level == "省"
+    assert matches[1].city is None
+    assert matches[1].district is None
+    assert matches[2].level is None

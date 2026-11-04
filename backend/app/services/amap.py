@@ -1,10 +1,10 @@
-"""高德 Web 服务适配器（P1-9 POI 2.0；P1-10 地理编码）。
+"""高德 Web 服务适配器（P1-9 POI 2.0；P1-10 地理编码与地标检索）。
 
 仅本模块直接接触高德的原始请求与响应：请求前把 WGS84 转为 GCJ-02，
 返回的 GCJ-02 坐标转回 WGS84，并把 POI 字段收敛为内部 `AMapPlace`，
-地理编码候选收敛为 `AMapGeocodeMatch`，不向 Service、前端或 Agent
-暴露厂商原始响应结构或未转换的坐标。密钥只参与请求参数，不写入日志
-或异常消息。
+地理编码候选收敛为 `AMapGeocodeMatch`，v5 地点搜索候选收敛为
+`AMapLandmarkCandidate`，不向 Service、前端或 Agent 暴露厂商原始
+响应结构或未转换的坐标。密钥只参与请求参数，不写入日志或异常消息。
 """
 
 import logging
@@ -53,12 +53,40 @@ class AMapPlace:
 
 
 @dataclass(frozen=True)
+class AMapLandmarkCandidate:
+    """v5 地点搜索地标候选；lat/lng 已转换为 WGS84。
+
+    仅收敛响应中的展示字段（id/name/省市区/详细地址/类型）；
+    `poi_id` 不进入对外契约。`formatted_address` 由省/市/区/详细
+    地址非空段去重拼接（直辖市重复段跳过），全空时回退名称。
+    """
+
+    poi_id: str
+    name: str
+    city: str | None
+    district: str | None
+    address: str
+    type_name: str
+    formatted_address: str
+    lat: float
+    lng: float
+
+
+@dataclass(frozen=True)
 class AMapGeocodeMatch:
-    """地理编码候选；lat/lng 已转换为 WGS84。"""
+    """地理编码候选；lat/lng 已转换为 WGS84。
+
+    `level` 为高德级别原文（门址/道路/省/兴趣点等），供 Service 排序
+    与展示精度；`city`/`district` 在高德返回非字符串（如 `[]`）时
+    收敛为 None，不透出数组。
+    """
 
     formatted_address: str
     lat: float
     lng: float
+    level: str | None = None
+    city: str | None = None
+    district: str | None = None
 
 
 def _in_china_mainland(lat: float, lng: float) -> bool:
@@ -189,11 +217,36 @@ class AMapClient:
             return None
         return pois[0]
 
-    def geocode(self, address: str) -> list[AMapGeocodeMatch]:
-        """结构化地址解析（v3 geocode/geo）：候选坐标已转回 WGS84。"""
-        payload = self._request(
-            "/v3/geocode/geo", {"key": self._api_key, "address": address}
-        )
+    def search_text(
+        self, keywords: str, city: str | None = None
+    ) -> list[AMapLandmarkCandidate]:
+        """关键字地点搜索（v5 place/text）：候选坐标已转回 WGS84。
+
+        `city` 可选；提供时附带 `citylimit=true` 限定城市，避免同名
+        地标跨城市召回。参数风格与 `search_around` 保持一致。
+        """
+        params: dict[str, str] = {
+            "key": self._api_key,
+            "keywords": keywords,
+            "page_size": "25",
+            "page_num": "1",
+            "show_fields": "business",
+        }
+        if city:
+            params["city"] = city
+            params["citylimit"] = "true"
+        payload = self._request("/v5/place/text", params)
+        return _parse_landmarks(payload)
+
+    def geocode(self, address: str, city: str | None = None) -> list[AMapGeocodeMatch]:
+        """结构化地址解析（v3 geocode/geo）：候选坐标已转回 WGS84。
+
+        `city` 可选；提供时作为城市限定传给高德，缩小跨省歧义。
+        """
+        params: dict[str, str] = {"key": self._api_key, "address": address}
+        if city:
+            params["city"] = city
+        payload = self._request("/v3/geocode/geo", params)
         return _parse_geocodes(payload)
 
     def _request(self, path: str, params: dict[str, str]) -> dict[str, object]:
@@ -255,7 +308,14 @@ def _parse_geocode(item: object) -> AMapGeocodeMatch | None:
     if gcj_lat is None or gcj_lng is None:
         return None
     lat, lng = gcj02_to_wgs84(gcj_lat, gcj_lng)
-    return AMapGeocodeMatch(formatted_address=formatted_address, lat=lat, lng=lng)
+    return AMapGeocodeMatch(
+        formatted_address=formatted_address,
+        lat=lat,
+        lng=lng,
+        level=_clean_text(item.get("level")),
+        city=_clean_text(item.get("city")),
+        district=_clean_text(item.get("district")),
+    )
 
 
 def _parse_pois(payload: dict[str, object]) -> list[AMapPlace]:
@@ -295,6 +355,79 @@ def _parse_poi(poi: object) -> AMapPlace | None:
         lng=lng,
         type_name=_clean_text(poi.get("type")) or "",
     )
+
+
+def _parse_landmarks(payload: dict[str, object]) -> list[AMapLandmarkCandidate]:
+    """解析 v5 地点搜索结果；pois 缺失或非数组视为上游异常。"""
+    pois = payload.get("pois")
+    if not isinstance(pois, list):
+        # 与 _parse_geocodes 一致：pois 结构异常按“上游不可用”处理（映射 502），
+        # 不能伪装成“无匹配”（映射 404）；合法的空数组才表示无匹配。
+        raise AMapUnavailable("高德返回的 pois 结构异常")
+    candidates: list[AMapLandmarkCandidate] = []
+    for poi in pois:
+        candidate = _parse_landmark(poi)
+        if candidate is not None:
+            candidates.append(candidate)
+    return candidates
+
+
+def _parse_landmark(poi: object) -> AMapLandmarkCandidate | None:
+    """把单个 v5 地标 POI 收敛为内部结构；缺失关键字段时跳过该条。"""
+    if not isinstance(poi, dict):
+        return None
+    poi_id = poi.get("id")
+    name = poi.get("name")
+    if not isinstance(poi_id, str) or not poi_id.strip():
+        return None
+    if not isinstance(name, str) or not name.strip():
+        return None
+    gcj_lat, gcj_lng = _parse_gcj02_location(poi.get("location"))
+    if gcj_lat is None or gcj_lng is None:
+        return None
+    lat, lng = gcj02_to_wgs84(gcj_lat, gcj_lng)
+    pname = _clean_text(poi.get("pname"))
+    cityname = _clean_text(poi.get("cityname"))
+    adname = _clean_text(poi.get("adname"))
+    address = _clean_text(poi.get("address")) or ""
+    return AMapLandmarkCandidate(
+        poi_id=poi_id.strip(),
+        name=name.strip(),
+        city=cityname or pname,
+        district=adname,
+        address=address,
+        type_name=_clean_text(poi.get("type")) or "",
+        formatted_address=(
+            _join_address_segments(pname, cityname, adname, address) or name.strip()
+        ),
+        lat=lat,
+        lng=lng,
+    )
+
+
+def _join_address_segments(*segments: str | None) -> str:
+    """拼接行政区与详细地址，合并相邻段的重复前缀。
+
+    详细地址可能已含完整或部分行政区；以最长的后缀/前缀重合
+    合并，避免再次叠加“上海市黄浦区”或“黄浦区”。
+    """
+    joined = ""
+    boundaries = {0}
+    for segment in segments:
+        text = (segment or "").strip()
+        if not text or text in joined:
+            continue
+        overlap = next(
+            (
+                len(joined) - start
+                for start in sorted(boundaries)
+                if joined[start:] and text.startswith(joined[start:])
+            ),
+            0,
+        )
+        boundaries.add(len(joined) - overlap)
+        joined += text[overlap:]
+    return joined
 
 
 def _parse_gcj02_location(location: object) -> tuple[float | None, float | None]:
