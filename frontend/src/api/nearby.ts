@@ -115,12 +115,19 @@ function validMatch(value: unknown): boolean {
   return (
     typeof match.formatted_address === "string" &&
     match.formatted_address.trim().length > 0 &&
+    ["name", "city", "district", "level"].every(
+      (key) => match[key] === null || typeof match[key] === "string",
+    ) &&
+    (match.match_kind === "poi" || match.match_kind === "geocode") &&
     match.data_source === "amap" &&
     validLocation(match.location)
   );
 }
 
-export async function resolveAddress(address: string): Promise<AddressMatch[]> {
+export async function resolveAddress(
+  address: string,
+  city?: string,
+): Promise<AddressMatch[]> {
   let response: Response;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 15000);
@@ -131,7 +138,10 @@ export async function resolveAddress(address: string): Promise<AddressMatch[]> {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ address }),
+      body: JSON.stringify({
+        address: address.trim(),
+        ...(city?.trim() ? { city: city.trim() } : {}),
+      }),
       signal: controller.signal,
     });
   } catch {

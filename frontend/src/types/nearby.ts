@@ -32,6 +32,11 @@ export interface NearbyResponse {
 }
 export interface AddressMatch {
   formatted_address: string;
+  name: string | null;
+  city: string | null;
+  district: string | null;
+  level: string | null;
+  match_kind: "poi" | "geocode";
   location: GeoLocation;
   data_source: "amap";
 }
