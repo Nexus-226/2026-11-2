@@ -29,6 +29,7 @@ def _pet() -> PetRead:
         id=PET_ID,
         name="豆豆",
         species="dog",
+        other_species=None,
         breed="金毛",
         birthday=date(2023, 5, 1),
         notes="对鸡肉过敏",
