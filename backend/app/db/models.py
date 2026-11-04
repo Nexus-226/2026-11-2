@@ -48,6 +48,9 @@ class Pet(Base):
     )
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     species: Mapped[str] = mapped_column(String(10), nullable=False)
+    # P2-1：other 的具体物种档案；可空列，存量数据回填 null，长度由应用层校验
+    # （SQLite 不强制 VARCHAR 长度）。
+    other_species: Mapped[str | None] = mapped_column(String(50), nullable=True)
     breed: Mapped[str | None] = mapped_column(String(100), nullable=True)
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Pet
 from app.db.repositories import pets as pet_repository
-from app.schemas.pet import PetCreate, PetRead
+from app.schemas.pet import (
+    ERROR_OTHER_SPECIES_NOT_ALLOWED,
+    ERROR_OTHER_SPECIES_NOT_CLEARED,
+    PetCreate,
+    PetRead,
+)
 from app.services.record_service import ensure_pet_can_be_deleted
 from app.services.reminder_service import (
     ensure_pet_can_be_deleted as ensure_pet_has_no_reminders,
@@ -55,8 +60,32 @@ def create_pet(session: Session, values: PetCreate) -> Pet:
     return pet_repository.create_pet(session, pet)
 
 
+def _validate_species_pair_on_update(pet: Pet, values: dict[str, object]) -> None:
+    """PATCH 合并原资料后的完整对象联合校验（P2-1 契约）。
+
+    仅凭 PetUpdate 请求体无法判断省略 species 时的实际物种，因此以合并后的
+    完整候选对象为准；同一请求体中已明确的冲突由 Schema 提前拦截，这里兜底
+    跨库状态冲突。校验在写入前执行，失败不产生任何部分修改。
+    """
+    species = values.get("species", pet.species)
+    other_species = values.get("other_species", pet.other_species)
+    if species not in ("dog", "cat") or not other_species:
+        return
+    if "species" in values and values["species"] != pet.species:
+        # 切换到 dog/cat 时未显式清空原具体物种（省略字段不自动清空）。
+        message = ERROR_OTHER_SPECIES_NOT_CLEARED
+    else:
+        # dog/cat 携带非空具体物种。
+        message = ERROR_OTHER_SPECIES_NOT_ALLOWED
+    raise HTTPException(
+        status_code=422,
+        detail={"code": "VALIDATION_ERROR", "message": message, "retryable": False},
+    )
+
+
 def update_pet(session: Session, pet_id: UUID, values: dict[str, object]) -> Pet:
     pet = get_pet_or_404(session, pet_id)
+    _validate_species_pair_on_update(pet, values)
     return pet_repository.update_pet(session, pet, values)
 
 
