@@ -58,6 +58,7 @@
 
 ### 标准化与输入类型
 
+- 前端 `frontend/src/lib/petSpecies.ts` 的空白集合须与后端 `backend/app/schemas/pet.py:normalize_other_species` 使用的 Python `str.strip()` 保持同步；任一端调整时须同步另一端并复核空白字符与长度边界，避免静默失配。
 - 创建时省略 `other_species` 等同 `null`；PATCH 省略表示不修改，显式 `null` 表示清空。
 - 仅接受字符串或 `null`；数字、布尔值、数组和对象均返回 `422 VALIDATION_ERROR`。
 - 字符串先去除首尾空白，空串转为 `null`，再检查标准化后长度（最多 50 个 Unicode 码点），最后校验与 species 的关联。仅移除首尾空白；不做 NFC 或其他 Unicode 归一化，不改写其余字符，不折叠内部空白。该 strip→null 规则仅用于新字段，不顺带改变 breed/notes 的既有行为。
