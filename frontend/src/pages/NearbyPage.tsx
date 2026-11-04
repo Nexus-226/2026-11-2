@@ -218,7 +218,12 @@ export default function NearbyPage({
         </header>
         {!started && (
           <section className="nearby-guide" aria-label="开始使用">
-            <h2>从哪里开始？</h2>
+            <div className="panel-title">
+              <div>
+                <span className="section-kicker">GET STARTED</span>
+                <h2>从哪里开始？</h2>
+              </div>
+            </div>
             <p>
               定位仅用于计算你与各地点的距离，不会保存你的位置；也可以主动选择演示区域，浏览内置的示例地点。
             </p>
@@ -343,6 +348,10 @@ export default function NearbyPage({
             )}
           </>
         )}
+        <footer className="page-footer">
+          <span>MADE FOR THE LITTLE ONES ♡</span>
+          <span>宠爱，从了解开始。</span>
+        </footer>
       </main>
     </>
   );
@@ -397,7 +406,12 @@ function AddressSearch({
 
   return (
     <section className="address-search" aria-label="按地址查找">
-      <h2>或者输入地点或地址查找</h2>
+      <div className="panel-title">
+        <div>
+          <span className="section-kicker">BY ADDRESS</span>
+          <h2>或者输入地点或地址查找</h2>
+        </div>
+      </div>
       <p>
         拒绝定位或不方便使用定位时，可输入地址并从解析候选中选择，再查询附近服务；多条候选由你自行选择，不会自动使用第一条。地址仅用于本次查询，不会保存。
       </p>
@@ -496,7 +510,12 @@ function AddressSearch({
 function PlaceList({ places }: { places: Place[] }) {
   return (
     <section className="nearby-panel" aria-label="地点列表">
-      <h2>地点列表</h2>
+      <div className="panel-title">
+        <div>
+          <span className="section-kicker">PLACES</span>
+          <h2>地点列表</h2>
+        </div>
+      </div>
       <ul className="place-list">
         {places.map((place) => (
           <li key={place.id} className="place-card">

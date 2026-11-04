@@ -57,14 +57,9 @@
 .reminders-panel {
   background: white;
   padding: 24px;
-  border: 1px solid #e0e7df;
-  border-radius: 18px;
-}
-.reminders-panel h2 {
-  margin: 0 0 18px;
-  font-size: var(--font-size-lg);
-  letter-spacing: var(--letter-spacing-heading);
-  font-weight: var(--font-weight-bold);
+  border: 1px solid #e6ede4;
+  border-radius: 20px;
+  box-shadow: 0 12px 35px rgba(43, 70, 47, 0.035);
 }
 .reminders-panel fieldset {
   border: 0;
