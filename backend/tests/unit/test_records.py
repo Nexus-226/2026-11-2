@@ -449,3 +449,110 @@ def test_record_pet_change_allowed_after_reference_cleared(client: TestClient) -
     assert reminder_after.status_code == 200
     assert reminder_after.json()["pet_id"] == pet_one
     assert reminder_after.json()["source_record_id"] is None
+
+
+def test_weight_trend_orders_desc_and_exposes_kg_number(client: TestClient) -> None:
+    """P2-2 体重趋势图消费契约：类型过滤、occurred_on 倒序与同日稳定排序。
+
+    列表按 occurred_on 倒序、同日按 created_at 倒序（后创建在前）返回；
+    weight_kg 序列化为 JSON number（公斤固定），非 weight 记录不得混入。
+    """
+    pet_id = create_pet(client, "豆豆")
+    created = [
+        client.post(
+            "/api/v1/records",
+            json={
+                "pet_id": pet_id,
+                "record_type": "weight",
+                "occurred_on": "2026-10-30",
+                "weight_kg": 4.1,
+            },
+        ),
+        client.post(
+            "/api/v1/records",
+            json={
+                "pet_id": pet_id,
+                "record_type": "bath",
+                "occurred_on": "2026-11-01",
+            },
+        ),
+        client.post(
+            "/api/v1/records",
+            json={
+                "pet_id": pet_id,
+                "record_type": "weight",
+                "occurred_on": "2026-11-02",
+                "weight_kg": 4.25,
+            },
+        ),
+        client.post(
+            "/api/v1/records",
+            json={
+                "pet_id": pet_id,
+                "record_type": "weight",
+                "occurred_on": "2026-11-02",
+                "weight_kg": 4.5,
+            },
+        ),
+    ]
+    assert all(item.status_code == 201 for item in created)
+
+    trend = client.get(
+        "/api/v1/records", params={"pet_id": pet_id, "record_type": "weight"}
+    )
+    assert trend.status_code == 200
+    weights = trend.json()
+    assert [(item["occurred_on"], item["weight_kg"]) for item in weights] == [
+        ("2026-11-02", 4.5),
+        ("2026-11-02", 4.25),
+        ("2026-10-30", 4.1),
+    ]
+    assert all(isinstance(item["weight_kg"], float) for item in weights)
+    assert all(item["record_type"] == "weight" for item in weights)
+
+
+def test_weight_trend_window_bounds_empty_and_single_point(
+    client: TestClient,
+) -> None:
+    """P2-2 体重趋势图消费契约：窗口首尾均包含、空窗口与单点。
+
+    窗口内无数据返回 200 []（图表空态）；窗口内仅一条时返回单元素数组
+    （画单点、不画连线）；窗口首尾日期均包含在结果内。
+    """
+    pet_id = create_pet(client, "团团")
+    for occurred_on, weight_kg in [("2026-11-01", 4.0), ("2026-11-03", 4.6)]:
+        response = client.post(
+            "/api/v1/records",
+            json={
+                "pet_id": pet_id,
+                "record_type": "weight",
+                "occurred_on": occurred_on,
+                "weight_kg": weight_kg,
+            },
+        )
+        assert response.status_code == 201
+
+    def list_weight_window(from_date: str, to_date: str) -> list[dict[str, object]]:
+        response = client.get(
+            "/api/v1/records",
+            params={
+                "pet_id": pet_id,
+                "record_type": "weight",
+                "from_date": from_date,
+                "to_date": to_date,
+            },
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    empty_window = list_weight_window("2026-11-02", "2026-11-02")
+    assert empty_window == []
+
+    single_point = list_weight_window("2026-11-03", "2026-11-03")
+    assert [item["weight_kg"] for item in single_point] == [4.6]
+
+    full_window = list_weight_window("2026-11-01", "2026-11-03")
+    assert [item["occurred_on"] for item in full_window] == [
+        "2026-11-03",
+        "2026-11-01",
+    ]

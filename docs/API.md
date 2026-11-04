@@ -174,6 +174,18 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - 创建仅接受 `pet_id`、`record_type`、`occurred_on`、`name`、`weight_kg`、`notes`；`PATCH` 只修改出现的字段，省略不变，可空字段传 `null` 表示清空。创建或 `PATCH` 包含未知字段，以及空对象 `PATCH`，均返回 `422 VALIDATION_ERROR`。`record_type` 与 `weight_kg` 按更新后的完整对象规则联合校验。记录被删除时不删除引用它的提醒，提醒的 `source_record_id` 清空。
 - 若记录被提醒作为 `source_record_id` 引用，`PATCH` 改变记录的 `pet_id` 不自动修改任何提醒；当新归属会使来源记录与提醒的宠物归属不一致时，返回 `409 RECORD_IN_USE`，用户先解除相关提醒的来源引用后再修改归属。`pet_id` 未改变时允许其他字段正常更新。
 
+#### P2-2：体重趋势图消费约定（C 主，B 协作）
+
+体重趋势图复用上方记录契约，不新增端点、字段、参数或错误码；以下均为既有已确认行为，仅补充绘图消费视角的说明，并由 `backend/tests/unit/test_records.py` 的 `test_weight_trend_*` 用例固化：
+
+- 拉取：`GET /api/v1/records?pet_id={pet_id}&record_type=weight`，可加 `from_date`/`to_date` 缩小窗口；窗口首尾日期均包含。宠物详情页必须显式传该宠物的 `pet_id`，不用全量列表替代。
+- 排序：响应按 `occurred_on` 倒序、同日按 `created_at` 倒序（后创建在前）、`id` 升序稳定排序；绘图前前端自行反转为时间正序，后端不提供正序参数。
+- 同日多条体重记录：契约不去重、不聚合，全部返回。前端如需“每日一点”，取同日列表首条（即最新创建的一条）；如全部绘出，需自行标注避免连线回折。
+- `weight_kg`：JSON number，固定公斤，大于 0、最多两位小数、上限 500；不存在其他单位，不做单位换算，前端不得再乘除换算系数。
+- 空数据返回 `200 []`（对应图表空态，与加载失败区分展示）；窗口内仅一条时返回单元素数组（画单点，不画连线）。
+- 错误态映射：`400 BAD_REQUEST`（`unlinked` 与 `pet_id` 同时提供，或开始日期晚于结束日期）、`404 PET_NOT_FOUND`（宠物不存在）、`422 VALIDATION_ERROR`（参数类型错误）；错误体遵循本页统一结构。
+- 趋势图仅展示历史记录事实，不根据体重数据给出健康诊断或建议。
+
 ### 站内提醒（`Reminder`）
 
 ```json
