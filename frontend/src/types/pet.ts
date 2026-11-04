@@ -4,6 +4,7 @@ export interface Pet {
   id: string;
   name: string;
   species: PetSpecies;
+  other_species: string | null;
   breed: string | null;
   birthday: string | null;
   notes: string | null;
@@ -11,7 +12,10 @@ export interface Pet {
   updated_at: string;
 }
 
-export type PetInput = Pick<Pet, "name" | "species" | "breed" | "birthday" | "notes">;
+export type PetInput = Pick<
+  Pet,
+  "name" | "species" | "other_species" | "breed" | "birthday" | "notes"
+>;
 
 export interface PetClient {
   list(): Promise<Pet[]>;

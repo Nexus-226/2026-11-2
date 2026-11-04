@@ -161,4 +161,10 @@ npm run format -- src/app/App.tsx
 
 拒绝定位或不便使用定位时，“附近服务”页面提供手动地址回退：输入地址（可选填城市）→ `POST /api/v1/locations/resolve` 解析为候选 → 用户自行选择候选 → 以 `center_source=resolved_address` 查询附近。后端按 Issue #62 冻结契约串行双查高德 v5 `place/text`（地标 POI）与 v3 `geocode/geo`，坐标转换与字段收敛复用 `app/services/amap.py`：候选含 `formatted_address`、`name/city/district/level`、`match_kind`（poi/geocode）、WGS84 `location` 与 `data_source`，按门址级 geocode → POI → 其余 geocode 排序、两路分别去重后上限 5 条，`city` 可选限定城市（未填写为全国搜索）；多条候选全部返回且不自动选择第一条；任一路失败/超时整体 502/504，两路均空 404 `ADDRESS_NOT_FOUND`、输入非法 422 `VALIDATION_ERROR`、未配置高德 503，均不做演示回退或字符串猜坐标。地址与坐标仅用于本次请求，不写入业务数据库或日志；页面明确说明定位用途，地址输入不自动触发任何查询。导航链接由 C 侧把 WGS84 转为 GCJ-02 后生成（`src/lib/coords.ts`，以 eviltransform 同源向量测试），仅在高德真实地点（`data_source: "amap"`）的卡片上提供，用户点击后在新窗口打开；演示地点为虚构数据，不提供导航入口。
 
+## P2-1：其他宠物具体物种（C 侧候选实现）
 
+宠物资料选择“其他”时可选填具体物种，保存后列表和详情显示“其他（兔）”；为空仍显示“其他”。切回猫狗会清空并显式提交 null。去首尾空白后最多 50 个 Unicode 码点，不做 NFC 或内部空白折叠，超限提示且保留输入。
+
+沿用 `VITE_PET_DATA_SOURCE`：默认本地演示可保存、编辑并刷新恢复，旧浏览器档案缺失该字段时补为 null；API 模式要求响应总含 `other_species`，接口错误或缺字段时明确失败，不回退演示数据。现有存储不会被自动清空。
+
+本候选包含最终写入字段，需 B 的完整后端（Schema、迁移、校验与持久化）就绪后才能启用和合入真实写入功能；PR #68 的只读前置项尚不足以支持保存。当前仅完成 C 侧实现与模拟测试，真实前后端、浏览器视觉及 Agent 联调待完成，不代表 P2-1 整体交付。

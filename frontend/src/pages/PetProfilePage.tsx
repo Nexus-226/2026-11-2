@@ -2,10 +2,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { petClient, usingDemoData } from "../api/pets";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import type { Pet, PetInput, PetSpecies } from "../types/pet";
+import { normalizeOtherSpecies } from "../lib/petSpecies";
 
 type FormValues = {
   name: string;
   species: PetSpecies;
+  other_species: string;
   breed: string;
   birthday: string;
   notes: string;
@@ -13,6 +15,7 @@ type FormValues = {
 const emptyForm: FormValues = {
   name: "",
   species: "dog",
+  other_species: "",
   breed: "",
   birthday: "",
   notes: "",
@@ -23,6 +26,12 @@ const speciesLabels: Record<PetSpecies, string> = {
   other: "其他",
 };
 
+function speciesLabel(pet: Pet): string {
+  return pet.species === "other" && pet.other_species
+    ? `其他（${pet.other_species}）`
+    : speciesLabels[pet.species];
+}
+
 function localToday(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -32,6 +41,7 @@ function formFromPet(pet: Pet): FormValues {
   return {
     name: pet.name,
     species: pet.species,
+    other_species: pet.other_species ?? "",
     breed: pet.breed ?? "",
     birthday: pet.birthday ?? "",
     notes: pet.notes ?? "",
@@ -42,6 +52,10 @@ function normalize(form: FormValues): PetInput {
   return {
     name: form.name.trim(),
     species: form.species,
+    other_species:
+      form.species === "other"
+        ? normalizeOtherSpecies(form.other_species)
+        : null,
     breed: form.breed.trim() || null,
     birthday: form.birthday || null,
     notes: form.notes.trim() || null,
@@ -129,6 +143,10 @@ export default function PetProfilePage({
     const input = normalize(form);
     if (!input.name) {
       setFormError("请填写宠物名字。");
+      return;
+    }
+    if (input.other_species && [...input.other_species].length > 50) {
+      setFormError("具体物种最多填写 50 个字符。");
       return;
     }
     if (input.birthday && input.birthday > localToday()) {
@@ -289,7 +307,7 @@ export default function PetProfilePage({
                       <span className="pet-card-text">
                         <strong>{pet.name}</strong>
                         <small>
-                          {speciesLabels[pet.species]}
+                          {speciesLabel(pet)}
                           {pet.breed ? ` · ${pet.breed}` : ""}
                         </small>
                       </span>
@@ -324,7 +342,7 @@ export default function PetProfilePage({
                   <p>
                     {creating
                       ? "从名字开始，认识你的新伙伴。"
-                      : "随时更新关于它的重要信息。"}
+                      : `随时更新关于它的重要信息。${selectedPet ? ` · ${speciesLabel(selectedPet)}` : ""}`}
                   </p>
                 </div>
                 <span className="form-flower" aria-hidden="true">
@@ -370,6 +388,10 @@ export default function PetProfilePage({
                         setForm({
                           ...form,
                           species: event.target.value as PetSpecies,
+                          other_species:
+                            event.target.value === "other"
+                              ? form.other_species
+                              : "",
                         })
                       }
                     >
@@ -378,6 +400,28 @@ export default function PetProfilePage({
                       <option value="other">其他</option>
                     </select>
                   </label>
+                  {form.species === "other" && (
+                    <label className="field field-wide">
+                      <span>
+                        具体物种 <small>选填</small>
+                      </span>
+                      <input
+                        autoComplete="off"
+                        placeholder="例如：兔、仓鼠、鹦鹉"
+                        aria-describedby="other-species-hint"
+                        value={form.other_species}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            other_species: event.target.value,
+                          })
+                        }
+                      />
+                      <small className="field-hint" id="other-species-hint">
+                        可留空，最多填写 50 个字符。
+                      </small>
+                    </label>
+                  )}
                   <label className="field">
                     <span>
                       品种 <small>选填</small>
