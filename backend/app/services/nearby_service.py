@@ -507,8 +507,9 @@ def resolve_address(address: str, city: str | None = None) -> AddressResolveResp
     「geocode 门址/门牌号 → POI（高德返回序）→ 其余 geocode」排序，
     两路分别去重后合并上限 5 条；两路均无匹配才返回 404。不根据
     字符串猜测坐标；地址与坐标仅用于本次请求，不写入日志或业务
-    数据库，因此本函数与适配器日志均不含地址内容。单次上游超时
-    5 秒，串行最坏约 10 秒（前端 15 秒预算内），先失败先返回。
+    数据库，因此本函数与适配器日志均不含地址内容。HTTPX 连接、
+    读写及连接池等待的阶段超时为 5 秒，不是整个请求的总时限；
+    串行双查不保证 10 秒内结束。先失败先返回，前端等待上限为 15 秒。
     """
     if not _amap_api_key():
         raise HTTPException(

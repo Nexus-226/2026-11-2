@@ -406,12 +406,27 @@ def _parse_landmark(poi: object) -> AMapLandmarkCandidate | None:
 
 
 def _join_address_segments(*segments: str | None) -> str:
-    """省/市/区/详细地址拼接：跳过空段与已包含的重复段（直辖市等）。"""
+    """拼接行政区与详细地址，合并相邻段的重复前缀。
+
+    详细地址可能已含完整或部分行政区；以最长的后缀/前缀重合
+    合并，避免再次叠加“上海市黄浦区”或“黄浦区”。
+    """
     joined = ""
+    boundaries = {0}
     for segment in segments:
         text = (segment or "").strip()
-        if text and text not in joined:
-            joined += text
+        if not text or text in joined:
+            continue
+        overlap = next(
+            (
+                len(joined) - start
+                for start in sorted(boundaries)
+                if joined[start:] and text.startswith(joined[start:])
+            ),
+            0,
+        )
+        boundaries.add(len(joined) - overlap)
+        joined += text[overlap:]
     return joined
 
 

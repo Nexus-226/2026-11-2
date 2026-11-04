@@ -731,6 +731,23 @@ def test_parse_landmarks_skips_invalid_entries() -> None:
     assert [candidate.poi_id for candidate in candidates] == ["B00157917M"]
 
 
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        ("人民大道185号", "上海市黄浦区人民大道185号"),
+        ("上海市黄浦区人民大道185号", "上海市黄浦区人民大道185号"),
+        ("黄浦区人民大道185号", "上海市黄浦区人民大道185号"),
+        ("黄浦区", "上海市黄浦区"),
+        ("", "上海市黄浦区"),
+        ("上海路18号", "上海市黄浦区上海路18号"),
+        ("区府路18号", "上海市黄浦区区府路18号"),
+    ],
+)
+def test_parse_landmark_merges_address_prefix(address: str, expected: str) -> None:
+    candidate = _parse_landmarks(ok_body([landmark(address=address)]))[0]
+    assert candidate.formatted_address == expected
+
+
 def test_parse_landmark_joins_address_segments_without_duplicates() -> None:
     # 直辖市省市区同名重复段去重；详细地址若重复行政区段不再叠加。
     candidate = _parse_landmarks(ok_body([landmark(address="黄浦区")]))[0]
