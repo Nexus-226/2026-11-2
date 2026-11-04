@@ -35,6 +35,7 @@
   background: #edf4ed;
   color: #253d39;
   cursor: pointer;
+  font-weight: var(--font-weight-bold);
 }
 .nearby-page button:disabled {
   opacity: 0.5;
@@ -75,6 +76,7 @@
   background: white;
   color: inherit;
   font: inherit;
+  font-weight: var(--font-weight-normal);
 }
 .nearby-source {
   background: #fdf3e3;
@@ -171,6 +173,7 @@
   border: 1px solid #cbd8d0;
   border-radius: 8px;
   font: inherit;
+  font-weight: var(--font-weight-normal);
   color: inherit;
 }
 .address-matches {

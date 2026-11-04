@@ -32,6 +32,7 @@
   background: white;
   color: inherit;
   font: inherit;
+  font-weight: var(--font-weight-normal);
   min-width: 0;
 }
 .reminders-page button {
@@ -42,6 +43,7 @@
   color: #253d39;
   cursor: pointer;
   margin-right: 8px;
+  font-weight: var(--font-weight-bold);
 }
 .reminders-page button:disabled {
   opacity: 0.5;
@@ -91,7 +93,7 @@
   margin-bottom: 16px;
 }
 .reminder-title {
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
 }
 .reminder-source {
   color: #5a7169;
