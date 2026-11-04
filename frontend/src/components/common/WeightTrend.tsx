@@ -60,12 +60,8 @@ export default function WeightTrend({
                   r.occurred_on <= today &&
                   (!from || r.occurred_on >= from),
               )
-              .sort(
-                (a, b) =>
-                  a.occurred_on.localeCompare(b.occurred_on) ||
-                  a.created_at.localeCompare(b.created_at) ||
-                  a.id.localeCompare(b.id),
-              ),
+              // Reverse the API's complete order, including timestamp ties.
+              .reverse(),
           });
       })
       .catch((e: unknown) => {
@@ -83,6 +79,10 @@ export default function WeightTrend({
   const items = state.items;
   const first = items[0],
     last = items[items.length - 1];
+  // Keep every dot, but connect only the last created reading on each date.
+  const daily = items.filter(
+    (r, i) => r.occurred_on !== items[i + 1]?.occurred_on,
+  );
   const active = items.find((r) => r.id === selected) ?? last;
   const values = items.map((r) => r.weight_kg!);
   const low = Math.min(...values),
@@ -183,12 +183,14 @@ export default function WeightTrend({
             <text x="72" y="22">
               kg
             </text>
-            <polyline
-              points={items.map((r) => `${x(r)},${y(r)}`).join(" ")}
-              fill="none"
-              stroke="#387768"
-              strokeWidth="3"
-            />
+            {daily.length > 1 && (
+              <polyline
+                points={daily.map((r) => `${x(r)},${y(r)}`).join(" ")}
+                fill="none"
+                stroke="#387768"
+                strokeWidth="3"
+              />
+            )}
             {items.map((r) => (
               <circle
                 key={r.id}
@@ -255,7 +257,7 @@ export default function WeightTrend({
             </div>
           </details>
           <p className="weight-footnote">
-            仅展示实际称重记录，连线不代表期间每日体重。趋势不用于诊断。
+            同日全部称重点保留，折线仅连接每日最后创建的一条；重叠点可查看明细。连线不代表期间每日体重，趋势不用于诊断。
           </p>
         </>
       )}

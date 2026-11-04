@@ -81,6 +81,18 @@ async def handle_http_error(
     return error_response(request, exc.status_code, code, message, retryable)
 
 
+def custom_validation_message(exc: RequestValidationError) -> str | None:
+    """透出应用层自定义校验消息（P2-1 关联校验要求 422 message 可区分）。
+
+    仅提取 ValueError 类消息；类型、未知字段等结构化错误沿用固定文案。
+    """
+    for error in exc.errors():
+        message = error.get("msg")
+        if isinstance(message, str) and message.startswith("Value error, "):
+            return message.removeprefix("Value error, ")
+    return None
+
+
 @app.exception_handler(RequestValidationError)
 async def handle_validation_error(
     request: Request, exc: RequestValidationError
@@ -88,7 +100,8 @@ async def handle_validation_error(
     is_invalid_json = any(error["type"] == "json_invalid" for error in exc.errors())
     if is_invalid_json:
         return error_response(request, 400, "BAD_REQUEST", "请求 JSON 格式无效")
-    return error_response(request, 422, "VALIDATION_ERROR", "请求字段缺失或不符合要求")
+    message = custom_validation_message(exc) or "请求字段缺失或不符合要求"
+    return error_response(request, 422, "VALIDATION_ERROR", message)
 
 
 @app.exception_handler(Exception)

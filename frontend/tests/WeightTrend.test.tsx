@@ -110,3 +110,18 @@ it("ignores late replies across pets and reports failures separately from empty 
   await screen.findByText("所选时间范围内暂无体重记录。");
   expect(screen.queryByRole("img")).toBeNull();
 });
+it("keeps timestamp ties in reverse API order and draws no line for a single date", async () => {
+  const a = {
+    ...record("1", "2026-11-04", 4.1),
+    created_at: "2026-11-04T01:00:00Z",
+  };
+  const b = { ...record("2", "2026-11-04", 4.2), created_at: a.created_at };
+  list.mockResolvedValue([a, b]);
+  const view = render(<WeightTrend {...props} />);
+  await screen.findByText("2 条称重记录");
+  expect(view.container.querySelector("polyline")).toBeNull();
+  expect(view.container.querySelectorAll("circle")).toHaveLength(2);
+  const cells = view.container.querySelectorAll("tbody tr");
+  expect(cells[0].textContent).toContain("4.2");
+  expect(cells[1].textContent).toContain("4.1");
+});

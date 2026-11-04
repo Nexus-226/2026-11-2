@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图演示版后端与页面已随 PR #40/#43 合并，P1-9 高德真实接入（POI 查询与详情）由本 PR 实现，`/locations/resolve` 地址解析待 P1-10。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端已随 PR #34 合并，提醒后端已随 PR #38 合并（C 提醒页面已随 PR #39 合并）。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图演示版后端与页面已随 PR #40/#43 合并，P1-9 高德真实接入（POI 查询与详情）由本 PR 实现，`/locations/resolve` 地址解析待 P1-10。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端已随 PR #34 合并，提醒后端已随 PR #38 合并（C 提醒页面已随 PR #39 合并）。其他约定仍需三人评审，接口变更先在 PR 中同步三人。P2-1 其他宠物具体物种的后端读写（含 Alembic 迁移与关联校验）由本 PR 实现；前端接入与三方联调在 B 完整后端合并后进行。
 
 ## 共同规则
 
@@ -36,6 +36,7 @@
   "id": "b8f34f24-f5cf-4b5c-8d40-073541725a11",
   "name": "豆豆",
   "species": "dog",
+  "other_species": null,
   "breed": "金毛",
   "birthday": "2023-05-01",
   "notes": "对鸡肉过敏",
@@ -44,7 +45,9 @@
 }
 ```
 
-`name` 为去除首尾空格后 1–50 字符；`species` 为 `dog`、`cat`、`other`。其余可选字段在响应中总是出现：`breed`、`notes` 为字符串或 `null`（最长分别 100、2000 字符），`birthday` 为 `YYYY-MM-DD` 日期或 `null`，不得晚于当天。创建时省略可选字段等同 `null`。时间戳为 UTC，并以 `Z` 结尾。
+`name` 为去除首尾空格后 1–50 字符；`species` 为 `dog`、`cat`、`other`。`other_species` 是 `species` 为 `other` 时的具体物种档案字段（如 `兔`）：仅接受字符串或 `null`，去除首尾空白后为空等同 `null`，标准化后最多 50 个 Unicode 码点（仅去首尾空白，不做 NFC 等归一化，不改写其余字符，不折叠内部空白）；`species` 为 `dog`/`cat` 时恒为 `null`。其余可选字段在响应中总是出现：`breed`、`notes` 为字符串或 `null`（最长分别 100、2000 字符），`birthday` 为 `YYYY-MM-DD` 日期或 `null`，不得晚于当天。创建时省略可选字段等同 `null`。时间戳为 UTC，并以 `Z` 结尾。
+
+数据库通过一个 Alembic revision 新增可空列（`String(50)`，长度由应用层校验保证）；所有存量宠物（包括 `other`）的 `other_species` 回填 `null`，不从 `breed`、`notes` 或聊天文本推断具体物种。部署顺序为先部署后端及迁移，再启用前端新字段。
 
 ### P0 最终决定：生日和备注字段
 
@@ -79,13 +82,19 @@
 }
 ```
 
+`species` 为 `other` 时可携带具体物种：
+
+```json
+{"name":"团团","species":"other","other_species":"兔"}
+```
+
 部分更新示例（清除备注，同时修改名称）：
 
 ```json
 {"name":"小豆","notes":null}
 ```
 
-PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes` 传 `null` 表示清空，`name` 和 `species` 不能为 `null`。空对象和未知字段返回 `422`。删除不存在的记录返回 `404`；若仍被会话引用则返回 `409 PET_IN_USE`，不自动删除会话（等会话生命周期实现后生效）。
+PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes`、`other_species` 传 `null` 表示清空（`other_species` 的 `null` 是合法清空操作），`name` 和 `species` 不能为 `null`。`other_species` 按合并原资料后的完整对象联合校验：`dog`/`cat` 携带非空具体物种返回 `422`；从 `other` 切回 `dog`/`cat` 时必须显式提交 `other_species: null`，仅隐藏输入框或省略字段不能清除旧值，否则返回 `422` 且原资料不变——两类 `422` 的 `message` 可区分，错误码仍为 `VALIDATION_ERROR`。空对象和未知字段返回 `422`。删除不存在的记录返回 `404`；若仍被会话引用则返回 `409 PET_IN_USE`，不自动删除会话（等会话生命周期实现后生效）。
 
 ## P0：对话
 
@@ -164,6 +173,18 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 - 端点：`GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}`。列表支持 `pet_id`、`unlinked`、`record_type`、`from_date`、`to_date`；默认按 `occurred_on` 倒序，再按 `created_at` 倒序及 `id` 升序稳定排序。创建返回 `201 Record`，读取/修改返回 `200 Record`，删除返回 `204`。
 - 创建仅接受 `pet_id`、`record_type`、`occurred_on`、`name`、`weight_kg`、`notes`；`PATCH` 只修改出现的字段，省略不变，可空字段传 `null` 表示清空。创建或 `PATCH` 包含未知字段，以及空对象 `PATCH`，均返回 `422 VALIDATION_ERROR`。`record_type` 与 `weight_kg` 按更新后的完整对象规则联合校验。记录被删除时不删除引用它的提醒，提醒的 `source_record_id` 清空。
 - 若记录被提醒作为 `source_record_id` 引用，`PATCH` 改变记录的 `pet_id` 不自动修改任何提醒；当新归属会使来源记录与提醒的宠物归属不一致时，返回 `409 RECORD_IN_USE`，用户先解除相关提醒的来源引用后再修改归属。`pet_id` 未改变时允许其他字段正常更新。
+
+#### P2-2：体重趋势图消费约定（C 主，B 协作）
+
+体重趋势图复用上方记录契约，不新增端点、字段、参数或错误码；以下均为既有已确认行为，仅补充绘图消费视角的说明，并由 `backend/tests/unit/test_records.py` 的 `test_weight_trend_*` 用例固化：
+
+- 拉取：`GET /api/v1/records?pet_id={pet_id}&record_type=weight`，可加 `from_date`/`to_date` 缩小窗口；窗口首尾日期均包含。宠物详情页必须显式传该宠物的 `pet_id`，不用全量列表替代。
+- 排序：响应按 `occurred_on` 倒序、同日按 `created_at` 倒序（后创建在前）、`id` 升序稳定排序；绘图前前端自行反转为时间正序，后端不提供正序参数。
+- 同日多条体重记录：契约不去重、不聚合，全部返回。前端如需“每日一点”，取同日列表首条（即最新创建的一条）；如全部绘出，需自行标注避免连线回折。
+- `weight_kg`：JSON number，固定公斤，大于 0、最多两位小数、上限 500；不存在其他单位，不做单位换算，前端不得再乘除换算系数。
+- 空数据返回 `200 []`（对应图表空态，与加载失败区分展示）；窗口内仅一条时返回单元素数组（画单点，不画连线）。
+- 错误态映射：`400 BAD_REQUEST`（`unlinked` 与 `pet_id` 同时提供，或开始日期晚于结束日期）、`404 PET_NOT_FOUND`（宠物不存在）、`422 VALIDATION_ERROR`（参数类型错误）；错误体遵循本页统一结构。
+- 趋势图仅展示历史记录事实，不根据体重数据给出健康诊断或建议。
 
 ### 站内提醒（`Reminder`）
 

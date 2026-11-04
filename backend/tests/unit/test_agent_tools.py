@@ -1,5 +1,7 @@
 from datetime import date, datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
+
+import pytest
 
 from app.agent.runtime import AgentRuntime
 from app.agent.schemas import ToolCallRequest
@@ -27,6 +29,7 @@ def _pet(**overrides: object) -> PetRead:
         "id": PET_ID,
         "name": "豆豆",
         "species": "dog",
+        "other_species": None,
         "breed": "金毛",
         "birthday": date(2023, 5, 1),
         "notes": "对鸡肉过敏",
@@ -84,3 +87,50 @@ def test_runtime_enforces_max_tool_calls() -> None:
     calls = [ToolCallRequest(name="list_pets", args={}) for _ in range(5)]
     results = runtime.run_tools(calls)
     assert len(results) == 3  # 超出上限的部分被丢弃，不执行
+
+
+def test_pet_tool_descriptions_mention_other_species() -> None:
+    registry = build_default_registry(FakePetService([]))
+    assert "other_species" in registry.get("get_pet_profile").description
+    assert "other_species" in registry.get("list_pets").description
+
+
+def test_pet_tools_expose_other_species_for_other_pet() -> None:
+    """P2-1：other 宠物的具体物种 other_species 经工具原样透传。"""
+    pet = _pet(species="other", other_species="兔")
+    runtime = AgentRuntime(build_default_registry(FakePetService([pet])))
+    result = runtime.run_tools(
+        [ToolCallRequest(name="get_pet_profile", args={"pet_id": str(PET_ID)})]
+    )[0]
+    assert result.status == "success"
+    assert result.data.other_species == "兔"
+    assert result.data.model_dump(mode="json")["other_species"] == "兔"
+
+
+@pytest.mark.parametrize("species", ["dog", "cat", "other"])
+def test_pet_tools_serialize_other_species_null(species: str) -> None:
+    """dog/cat/other 未填具体物种时，other_species 恒为 null，序列化后仍为 null。"""
+    pet = _pet(species=species, other_species=None)
+    runtime = AgentRuntime(build_default_registry(FakePetService([pet])))
+    result = runtime.run_tools(
+        [ToolCallRequest(name="get_pet_profile", args={"pet_id": str(PET_ID)})]
+    )[0]
+    assert result.status == "success"
+    assert result.data.other_species is None
+    assert result.data.model_dump(mode="json")["other_species"] is None
+
+
+def test_list_pets_serializes_other_species() -> None:
+    """list_pets 与 get_pet_profile 共用 PetRead 序列化，每条结果都带 other_species。"""
+    pets = [
+        _pet(id=uuid4(), species="other", other_species="兔"),
+        _pet(id=uuid4(), species="other", other_species=None),
+        _pet(id=uuid4(), species="dog", other_species=None),
+        _pet(id=uuid4(), species="cat", other_species=None),
+    ]
+    runtime = AgentRuntime(build_default_registry(FakePetService(pets)))
+    result = runtime.run_tools([ToolCallRequest(name="list_pets", args={})])[0]
+    assert result.status == "success"
+    assert len(result.data) == 4
+    dumped = [pet.model_dump(mode="json") for pet in result.data]
+    assert [item["other_species"] for item in dumped] == ["兔", None, None, None]
