@@ -88,6 +88,53 @@ describe("宠物演示数据", () => {
     ).toBe("e\u0301  兔");
   });
 
+  it("演示读写保留后端合法的 U+FEFF，编辑其他字段不改写物种", async () => {
+    const value = "\uFEFF兔\uFEFF";
+    localStorage.setItem(
+      key,
+      JSON.stringify([{ ...pet, other_species: value }]),
+    );
+    const pets = await client();
+    expect((await pets.list())[0].other_species).toBe(value);
+    await pets.update(pet.id, {
+      ...input,
+      name: "新名字",
+      other_species: value,
+    });
+    expect((await (await client()).list())[0].other_species).toBe(value);
+  });
+
+  it.each(["\u0085", "\u001c", "\u001d", "\u001e", "\u001f"])(
+    "空白 %j 与后端一致：去首尾、空转 null，不计入 50 码点边界",
+    async (space) => {
+      const pets = await client();
+      const value = "𠮷".repeat(50);
+      const saved = await pets.create({
+        ...input,
+        other_species: `${space}${value}${space}`,
+      });
+      expect(saved.other_species).toBe(value);
+      expect(
+        (await pets.update(saved.id, { ...input, other_species: space }))
+          .other_species,
+      ).toBeNull();
+    },
+  );
+
+  it("保留的 U+FEFF 计入长度，50 允许、51 拒绝", async () => {
+    const pets = await client();
+    const value = `\uFEFF${"𠮷".repeat(48)}\uFEFF`;
+    expect(
+      (await pets.create({ ...input, other_species: value })).other_species,
+    ).toBe(value);
+    await expect(
+      pets.create({
+        ...input,
+        other_species: `\uFEFF${"𠮷".repeat(49)}\uFEFF`,
+      }),
+    ).rejects.toThrow("50");
+  });
+
   it("存储写入失败不伪造保存成功", async () => {
     const pets = await client();
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
@@ -99,6 +146,45 @@ describe("宠物演示数据", () => {
 });
 
 describe("宠物 API Client（模拟 HTTP）", () => {
+  it("API 列表和保存响应允许 U+FEFF，写回保留原字符，仍按后端规则去其他首尾空白", async () => {
+    const value = "\uFEFF兔\uFEFF";
+    const stored = { ...pet, other_species: value };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            stored,
+            { ...pet, id: "pet-2", other_species: null },
+          ]),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(stored), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...stored, name: "新名字" })),
+      );
+    vi.stubGlobal("fetch", fetch);
+    const pets = await client("api");
+    expect(await pets.list()).toEqual([
+      stored,
+      { ...pet, id: "pet-2", other_species: null },
+    ]);
+    expect(
+      (await pets.create({ ...input, other_species: `\u0085${value}\u001c` }))
+        .other_species,
+    ).toBe(value);
+    await pets.update(pet.id, {
+      ...input,
+      name: "新名字",
+      other_species: value,
+    });
+    expect(JSON.parse(fetch.mock.calls[1][1].body).other_species).toBe(value);
+    expect(JSON.parse(fetch.mock.calls[2][1].body).other_species).toBe(value);
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
   it("正确发送创建/更新字段与显式 null，不丢失具体物种", async () => {
     const fetch = vi
       .fn()

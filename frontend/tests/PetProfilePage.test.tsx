@@ -46,6 +46,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("编辑已有档案的名字时，不删除具体物种中后端合法保留的 U+FEFF", async () => {
+  const value = "\uFEFF兔\uFEFF";
+  mocks.list.mockResolvedValue([{ ...pet, other_species: value }]);
+  const user = userEvent.setup();
+  render(<PetProfilePage onNavigate={vi.fn()} />);
+  await screen.findByRole("textbox", { name: /具体物种/ });
+  expect(detail().value).toBe(value);
+  await user.clear(name());
+  await user.type(name(), "新名字");
+  await user.click(screen.getByRole("button", { name: /保存修改/ }));
+  await screen.findByText("宠物资料已保存。");
+  expect(mocks.update).toHaveBeenCalledWith(
+    pet.id,
+    expect.objectContaining({ name: "新名字", other_species: value }),
+  );
+  expect(detail().value).toBe(value);
+});
+
 it("创建具体物种，展示列表与详情；编辑后刷新重新读取", async () => {
   const user = userEvent.setup();
   const view = render(<PetProfilePage onNavigate={vi.fn()} />);
