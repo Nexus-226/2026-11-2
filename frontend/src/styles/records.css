@@ -9,6 +9,7 @@
   background: #edf4ed;
   padding: 16px;
   border-radius: 12px;
+  margin: 0 0 22px;
 }
 .records-filters {
   display: flex;

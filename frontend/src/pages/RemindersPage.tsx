@@ -214,18 +214,25 @@ export default function RemindersPage({
         navigationDisabled={busy}
       />
       <main className="reminders-page">
-        <header>
-          <p className="eyebrow">
-            <span aria-hidden="true">✳</span> &nbsp; REMINDERS
-          </p>
-          <h1>待办提醒</h1>
-          <p className="subtitle">计划要做的护理事项，到期前提醒你。</p>
-          <p className="reminders-source">
-            {usingDemoReminders
-              ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"
-              : "后端 API 数据 · 以服务端保存结果为准"}
-          </p>
+        <header className="page-heading">
+          <div>
+            <p className="eyebrow">
+              <span aria-hidden="true">✳</span> &nbsp; REMINDERS
+            </p>
+            <h1>
+              待办提醒<span className="heading-dot">.</span>
+            </h1>
+            <p className="subtitle">计划要做的护理事项，到期前提醒你。</p>
+          </div>
+          <span className="heading-illustration" aria-hidden="true">
+            ♡<span>✦</span>
+          </span>
         </header>
+        <p className="reminders-source">
+          {usingDemoReminders
+            ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"
+            : "后端 API 数据 · 以服务端保存结果为准"}
+        </p>
         {mismatch && (
           <p role="alert">
             API 提醒需要设置 VITE_PET_DATA_SOURCE=api

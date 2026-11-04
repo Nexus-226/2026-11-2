@@ -202,12 +202,19 @@ export default function NearbyPage({
     <>
       <AppHeader active="nearby" onNavigate={onNavigate} />
       <main className="nearby-page">
-        <header>
-          <p className="eyebrow">
-            <span aria-hidden="true">✳</span> &nbsp; NEARBY SERVICES
-          </p>
-          <h1>附近服务</h1>
-          <p className="subtitle">按距离查看附近的宠物医院、美容和用品店。</p>
+        <header className="page-heading">
+          <div>
+            <p className="eyebrow">
+              <span aria-hidden="true">✳</span> &nbsp; NEARBY SERVICES
+            </p>
+            <h1>
+              附近服务<span className="heading-dot">.</span>
+            </h1>
+            <p className="subtitle">按距离查看附近的宠物医院、美容和用品店。</p>
+          </div>
+          <span className="heading-illustration" aria-hidden="true">
+            ♡<span>✦</span>
+          </span>
         </header>
         {!started && (
           <section className="nearby-guide" aria-label="开始使用">
