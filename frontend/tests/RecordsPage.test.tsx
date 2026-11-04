@@ -47,9 +47,7 @@ it("queries unlinked separately and explicitly scopes pet queries", async () => 
   fireEvent.change(screen.getByLabelText("宠物范围"), {
     target: { value: "p" },
   });
-  await waitFor(() =>
-    expect(mocks.list).toHaveBeenLastCalledWith({ pet_id: "p" }),
-  );
+  await waitFor(() => expect(mocks.list).toHaveBeenCalledWith({ pet_id: "p" }));
 });
 it("keeps input on failure and clears weight when changing record type", async () => {
   mocks.create
@@ -110,4 +108,44 @@ it("shows query failure rather than empty state and can retry", async () => {
   expect(screen.queryByText("当前筛选下暂无记录。")).toBeNull();
   fireEvent.click(screen.getByText("重试"));
   await screen.findByText("当前筛选下暂无记录。");
+});
+
+it("preserves the trend window across pet switches without unscoped queries", async () => {
+  mocks.pets.mockResolvedValue([
+    { id: "p", name: "豆豆" },
+    { id: "q", name: "团团" },
+  ]);
+  render(<RecordsPage onNavigate={() => {}} />);
+  await screen.findByText("豆豆");
+  fireEvent.change(screen.getByLabelText("宠物范围"), {
+    target: { value: "p" },
+  });
+  fireEvent.click(await screen.findByText("全部"));
+  await waitFor(() =>
+    expect(mocks.list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pet_id: "p",
+        record_type: "weight",
+        to_date: expect.any(String),
+      }),
+    ),
+  );
+  mocks.list.mockClear();
+  fireEvent.change(screen.getByLabelText("宠物范围"), {
+    target: { value: "q" },
+  });
+  await waitFor(() =>
+    expect(mocks.list).toHaveBeenCalledWith({
+      pet_id: "q",
+      record_type: "weight",
+      to_date: expect.any(String),
+    }),
+  );
+  expect(
+    screen.getByRole("button", { name: "全部" }).getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(mocks.list).not.toHaveBeenCalledWith({});
+  expect(mocks.list.mock.calls.every(([filter]) => filter.pet_id === "q")).toBe(
+    true,
+  );
 });

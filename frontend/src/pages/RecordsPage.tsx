@@ -9,6 +9,7 @@ import {
 } from "../types/records";
 import type { Pet } from "../types/pet";
 import "../styles/records.css";
+import WeightTrend from "../components/common/WeightTrend";
 const labels: Record<RecordType, string> = {
   vaccine: "疫苗",
   deworming: "驱虫",
@@ -41,6 +42,7 @@ export default function RecordsPage({
     [name, setName] = useState(""),
     [weight, setWeight] = useState(""),
     [notes, setNotes] = useState("");
+  const [trendRange, setTrendRange] = useState("90");
   const mismatch = !usingDemoRecords && usingDemoData;
   useEffect(() => {
     let live = true;
@@ -240,8 +242,30 @@ export default function RecordsPage({
             刷新记录
           </button>
         </section>
+        <WeightTrend
+          key={scope}
+          initialRange={trendRange}
+          onRangeChange={setTrendRange}
+          petId={
+            scope !== "unlinked" &&
+            !mismatch &&
+            !petError &&
+            pets.some((p) => p.id === scope)
+              ? scope
+              : null
+          }
+          petName={pets.find((p) => p.id === scope)?.name ?? "所选宠物"}
+          revision={reload}
+          onAdd={() => {
+            reset();
+            setType("weight");
+            document
+              .getElementById("record-weight")
+              ?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+          }}
+        />
         <div className="records-layout">
-          <section className="records-panel">
+          <section className="records-panel" id="record-weight">
             <h2>{editing ? "编辑记录" : "添加记录"}</h2>
             <p>
               当前：

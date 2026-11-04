@@ -1,0 +1,92 @@
+.weight-trend {
+  margin-bottom: 24px;
+}
+.weight-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.weight-heading h2 {
+  margin: 0;
+}
+.weight-heading p,
+.weight-footnote {
+  color: #596e66;
+  font-size: 14px;
+}
+.weight-trend button[aria-pressed="true"] {
+  background: #253d39;
+  color: white;
+}
+.weight-summary {
+  display: flex;
+  gap: 48px;
+  margin: 24px 0 8px;
+}
+.weight-summary strong {
+  display: block;
+  font-size: 30px;
+  margin: 8px 0;
+}
+.weight-summary small {
+  font-size: 16px;
+  font-weight: normal;
+}
+.weight-summary span {
+  font-size: 13px;
+  color: #596e66;
+}
+.weight-trend svg {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+}
+.weight-trend svg text {
+  fill: #596e66;
+  font-size: 13px;
+}
+.weight-trend circle {
+  cursor: pointer;
+}
+.weight-trend circle:focus {
+  outline: 2px solid #253d39;
+}
+.weight-detail {
+  background: #edf4ed;
+  padding: 14px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.weight-trend summary {
+  cursor: pointer;
+  padding: 12px 0;
+}
+.weight-table {
+  overflow-x: auto;
+}
+.weight-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.weight-table caption {
+  text-align: left;
+  font-size: 13px;
+  padding-bottom: 12px;
+}
+.weight-table th,
+.weight-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e0e7df;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 500px) {
+  .weight-summary {
+    gap: 24px;
+  }
+  .weight-summary strong {
+    font-size: 25px;
+  }
+}
