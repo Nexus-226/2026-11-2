@@ -214,16 +214,36 @@ export default function RemindersPage({
         navigationDisabled={busy}
       />
       <main className="reminders-page">
-        <header>
-          <p>REMINDERS</p>
-          <h1>待办提醒</h1>
-          <p>计划要做的护理事项，到期前提醒你。</p>
-          <p className="reminders-source">
-            {usingDemoReminders
-              ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"
-              : "后端 API 数据 · 以服务端保存结果为准"}
-          </p>
+        <header className="page-heading">
+          <div>
+            <p className="eyebrow">
+              <span aria-hidden="true">✳</span> &nbsp; REMINDERS
+            </p>
+            <h1>
+              待办提醒<span className="heading-dot">.</span>
+            </h1>
+            <p className="subtitle">计划要做的护理事项，到期前提醒你。</p>
+          </div>
+          <span className="heading-illustration" aria-hidden="true">
+            ♡<span>✦</span>
+          </span>
         </header>
+        <div
+          className={`mode-banner ${usingDemoReminders ? "demo" : "connected"}`}
+          role="status"
+        >
+          <span className="mode-dot" aria-hidden="true" />
+          <div>
+            <strong>
+              {usingDemoReminders ? "本地演示数据" : "后端 API 数据"}
+            </strong>
+            <span>
+              {usingDemoReminders
+                ? "仅保存在当前浏览器，不同步后端"
+                : "以服务端保存结果为准"}
+            </span>
+          </div>
+        </div>
         {mismatch && (
           <p role="alert">
             API 提醒需要设置 VITE_PET_DATA_SOURCE=api
@@ -262,18 +282,36 @@ export default function RemindersPage({
           </button>
         </section>
         <div className="reminders-layout">
-          <section className="reminders-panel">
-            <h2>{editing ? "编辑提醒" : "添加提醒"}</h2>
-            <p>
-              当前：
-              {scope === "unlinked"
-                ? "未关联宠物"
-                : (pets.find((p) => p.id === scope)?.name ?? "所选宠物")}
-            </p>
+          <section className="form-panel">
+            <div className="form-heading">
+              <div>
+                <span className="section-kicker">ADD REMINDER</span>
+                <h2>{editing ? "编辑提醒" : "添加提醒"}</h2>
+                <p>
+                  当前：
+                  {scope === "unlinked"
+                    ? "未关联宠物"
+                    : (pets.find((p) => p.id === scope)?.name ?? "所选宠物")}
+                </p>
+              </div>
+              <span className="form-flower" aria-hidden="true">
+                ✽
+              </span>
+            </div>
+            {notice && (
+              <div className="notice success" role="status">
+                {notice}
+              </div>
+            )}
+            {formError && (
+              <div className="notice error" role="alert">
+                {formError}
+              </div>
+            )}
             <form onSubmit={save}>
-              <fieldset disabled={busy}>
-                <label>
-                  标题
+              <fieldset className="field-grid" disabled={busy}>
+                <label className="field">
+                  <span>标题</span>
                   <input
                     required
                     maxLength={120}
@@ -281,8 +319,8 @@ export default function RemindersPage({
                     onChange={(e) => setTitle(e.target.value)}
                   />
                 </label>
-                <label>
-                  到期日期（上海时区）
+                <label className="field">
+                  <span>到期日期（上海时区）</span>
                   <input
                     required
                     type="date"
@@ -291,13 +329,16 @@ export default function RemindersPage({
                   />
                 </label>
                 {recordsMismatch ? (
-                  <p>
-                    来源记录需要设置 VITE_RECORD_DATA_SOURCE=api
-                    并重启后才可用；当前无法关联来源记录。
-                  </p>
+                  <div className="field field-wide">
+                    <span>来源记录</span>
+                    <p className="field-hint">
+                      来源记录需要设置 VITE_RECORD_DATA_SOURCE=api
+                      并重启后才可用；当前无法关联来源记录。
+                    </p>
+                  </div>
                 ) : (
-                  <label>
-                    来源记录（可选）
+                  <label className="field">
+                    <span>来源记录（可选）</span>
                     <select
                       value={sourceRecordId}
                       onChange={(e) => setSourceRecordId(e.target.value)}
@@ -311,20 +352,35 @@ export default function RemindersPage({
                     </select>
                   </label>
                 )}
-                {recordsError && <p role="alert">{recordsError}</p>}
-                {formError && <p role="alert">{formError}</p>}
-                <button type="submit">{busy ? "处理中…" : "保存提醒"}</button>
+                {recordsError && (
+                  <p className="notice error field-wide" role="alert">
+                    {recordsError}
+                  </p>
+                )}
+              </fieldset>
+              <div className="form-actions">
+                <button type="submit" className="button primary">
+                  {busy ? "处理中…" : "保存提醒"}
+                </button>
                 {editing && (
-                  <button type="button" onClick={reset}>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={reset}
+                  >
                     取消编辑
                   </button>
                 )}
-              </fieldset>
+              </div>
             </form>
-            <p role="status">{notice}</p>
           </section>
           <section className="reminders-panel" aria-label="待办卡片">
-            <h2>待办</h2>
+            <div className="panel-title">
+              <div>
+                <span className="section-kicker">TODO</span>
+                <h2>待办</h2>
+              </div>
+            </div>
             {loading ? (
               <p role="status">正在加载提醒…</p>
             ) : error ? (
@@ -390,6 +446,10 @@ export default function RemindersPage({
             )}
           </section>
         </div>
+        <footer className="page-footer">
+          <span>MADE FOR THE LITTLE ONES ♡</span>
+          <span>宠爱，从了解开始。</span>
+        </footer>
       </main>
     </>
   );

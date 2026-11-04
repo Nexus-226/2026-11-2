@@ -3,11 +3,10 @@
   margin: 40px auto;
   padding: 0 24px 60px;
   color: #253d39;
+  font-size: var(--font-size-base);
 }
-.records-source {
-  background: #edf4ed;
-  padding: 16px;
-  border-radius: 12px;
+.records-panel > p {
+  color: #9ba89c;
 }
 .records-filters {
   display: flex;
@@ -19,6 +18,7 @@
 .records-page label {
   display: grid;
   gap: 8px;
+  font-weight: var(--font-weight-bold);
 }
 .records-page input,
 .records-page select,
@@ -29,6 +29,7 @@
   background: white;
   color: inherit;
   font: inherit;
+  font-weight: var(--font-weight-normal);
   min-width: 0;
 }
 .records-page button {
@@ -39,6 +40,7 @@
   color: #253d39;
   cursor: pointer;
   margin-right: 8px;
+  font-weight: var(--font-weight-bold);
 }
 .records-page button:disabled {
   opacity: 0.5;
@@ -52,8 +54,14 @@
 .records-panel {
   background: white;
   padding: 24px;
-  border: 1px solid #e0e7df;
-  border-radius: 18px;
+  border: 1px solid #e6ede4;
+  border-radius: 20px;
+  box-shadow: 0 12px 35px rgba(43, 70, 47, 0.035);
+}
+.records-page h3 {
+  margin: 0 0 6px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
 }
 .records-panel fieldset {
   border: 0;

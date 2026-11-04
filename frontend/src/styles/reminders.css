@@ -3,11 +3,10 @@
   margin: 40px auto;
   padding: 0 24px 60px;
   color: #253d39;
+  font-size: var(--font-size-base);
 }
-.reminders-source {
-  background: #edf4ed;
-  padding: 16px;
-  border-radius: 12px;
+.reminders-panel > p {
+  color: #9ba89c;
 }
 .reminders-filters {
   display: flex;
@@ -19,6 +18,7 @@
 .reminders-page label {
   display: grid;
   gap: 8px;
+  font-weight: var(--font-weight-bold);
 }
 .reminders-page input,
 .reminders-page select,
@@ -29,6 +29,7 @@
   background: white;
   color: inherit;
   font: inherit;
+  font-weight: var(--font-weight-normal);
   min-width: 0;
 }
 .reminders-page button {
@@ -39,6 +40,7 @@
   color: #253d39;
   cursor: pointer;
   margin-right: 8px;
+  font-weight: var(--font-weight-bold);
 }
 .reminders-page button:disabled {
   opacity: 0.5;
@@ -52,8 +54,9 @@
 .reminders-panel {
   background: white;
   padding: 24px;
-  border: 1px solid #e0e7df;
-  border-radius: 18px;
+  border: 1px solid #e6ede4;
+  border-radius: 20px;
+  box-shadow: 0 12px 35px rgba(43, 70, 47, 0.035);
 }
 .reminders-panel fieldset {
   border: 0;
@@ -67,7 +70,8 @@
 }
 .reminder-group h3 {
   margin: 0 0 12px;
-  font-size: 1rem;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
   color: #45615a;
 }
 .reminder-group ul {
@@ -81,11 +85,11 @@
   margin-bottom: 16px;
 }
 .reminder-title {
-  font-weight: 600;
+  font-weight: var(--font-weight-bold);
 }
 .reminder-source {
   color: #5a7169;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 .reminder-actions {
   margin-top: 10px;

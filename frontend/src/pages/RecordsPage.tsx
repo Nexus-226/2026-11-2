@@ -162,16 +162,36 @@ export default function RecordsPage({
         navigationDisabled={busy}
       />
       <main className="records-page">
-        <header>
-          <p>CARE JOURNAL</p>
-          <h1>日常记录</h1>
-          <p>保存已经发生的护理和体重变化。</p>
-          <p className="records-source">
-            {usingDemoRecords
-              ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"
-              : "后端 API 数据 · 以服务端保存结果为准"}
-          </p>
+        <header className="page-heading">
+          <div>
+            <p className="eyebrow">
+              <span aria-hidden="true">✳</span> &nbsp; CARE JOURNAL
+            </p>
+            <h1>
+              日常记录<span className="heading-dot">.</span>
+            </h1>
+            <p className="subtitle">保存已经发生的护理和体重变化。</p>
+          </div>
+          <span className="heading-illustration" aria-hidden="true">
+            ♡<span>✦</span>
+          </span>
         </header>
+        <div
+          className={`mode-banner ${usingDemoRecords ? "demo" : "connected"}`}
+          role="status"
+        >
+          <span className="mode-dot" aria-hidden="true" />
+          <div>
+            <strong>
+              {usingDemoRecords ? "本地演示数据" : "后端 API 数据"}
+            </strong>
+            <span>
+              {usingDemoRecords
+                ? "仅保存在当前浏览器，不同步后端"
+                : "以服务端保存结果为准"}
+            </span>
+          </div>
+        </div>
         {mismatch && (
           <p role="alert">
             API 记录需要设置 VITE_PET_DATA_SOURCE=api
@@ -265,18 +285,36 @@ export default function RecordsPage({
           }}
         />
         <div className="records-layout">
-          <section className="records-panel" id="record-weight">
-            <h2>{editing ? "编辑记录" : "添加记录"}</h2>
-            <p>
-              当前：
-              {scope === "unlinked"
-                ? "未关联宠物"
-                : (pets.find((p) => p.id === scope)?.name ?? "所选宠物")}
-            </p>
+          <section className="form-panel" id="record-weight">
+            <div className="form-heading">
+              <div>
+                <span className="section-kicker">ADD RECORD</span>
+                <h2>{editing ? "编辑记录" : "添加记录"}</h2>
+                <p>
+                  当前：
+                  {scope === "unlinked"
+                    ? "未关联宠物"
+                    : (pets.find((p) => p.id === scope)?.name ?? "所选宠物")}
+                </p>
+              </div>
+              <span className="form-flower" aria-hidden="true">
+                ✽
+              </span>
+            </div>
+            {notice && (
+              <div className="notice success" role="status">
+                {notice}
+              </div>
+            )}
+            {formError && (
+              <div className="notice error" role="alert">
+                {formError}
+              </div>
+            )}
             <form onSubmit={save}>
-              <fieldset disabled={busy}>
-                <label>
-                  护理类型
+              <fieldset className="field-grid" disabled={busy}>
+                <label className="field">
+                  <span>护理类型</span>
                   <select
                     value={type}
                     onChange={(e) => {
@@ -291,8 +329,8 @@ export default function RecordsPage({
                     ))}
                   </select>
                 </label>
-                <label>
-                  发生日期（上海时区）
+                <label className="field">
+                  <span>发生日期（上海时区）</span>
                   <input
                     required
                     type="date"
@@ -301,8 +339,8 @@ export default function RecordsPage({
                     onChange={(e) => setDate(e.target.value)}
                   />
                 </label>
-                <label>
-                  项目或产品名称
+                <label className="field">
+                  <span>项目或产品名称</span>
                   <input
                     maxLength={100}
                     value={name}
@@ -310,8 +348,8 @@ export default function RecordsPage({
                   />
                 </label>
                 {type === "weight" && (
-                  <label>
-                    体重（kg）
+                  <label className="field">
+                    <span>体重（kg）</span>
                     <input
                       required
                       type="number"
@@ -323,27 +361,38 @@ export default function RecordsPage({
                     />
                   </label>
                 )}
-                <label>
-                  备注
+                <label className="field field-wide">
+                  <span>备注</span>
                   <textarea
                     maxLength={2000}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                   />
                 </label>
-                {formError && <p role="alert">{formError}</p>}
-                <button type="submit">{busy ? "处理中…" : "保存记录"}</button>
+              </fieldset>
+              <div className="form-actions">
+                <button type="submit" className="button primary">
+                  {busy ? "处理中…" : "保存记录"}
+                </button>
                 {editing && (
-                  <button type="button" onClick={reset}>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={reset}
+                  >
                     取消编辑
                   </button>
                 )}
-              </fieldset>
+              </div>
             </form>
-            <p role="status">{notice}</p>
           </section>
           <section className="records-panel" aria-label="记录时间线">
-            <h2>记录时间线</h2>
+            <div className="panel-title">
+              <div>
+                <span className="section-kicker">TIMELINE</span>
+                <h2>记录时间线</h2>
+              </div>
+            </div>
             {loading ? (
               <p role="status">正在加载记录…</p>
             ) : error ? (
@@ -389,6 +438,10 @@ export default function RecordsPage({
             )}
           </section>
         </div>
+        <footer className="page-footer">
+          <span>MADE FOR THE LITTLE ONES ♡</span>
+          <span>宠爱，从了解开始。</span>
+        </footer>
       </main>
     </>
   );

@@ -202,14 +202,28 @@ export default function NearbyPage({
     <>
       <AppHeader active="nearby" onNavigate={onNavigate} />
       <main className="nearby-page">
-        <header>
-          <p>NEARBY SERVICES</p>
-          <h1>附近服务</h1>
-          <p>按距离查看附近的宠物医院、美容和用品店。</p>
+        <header className="page-heading">
+          <div>
+            <p className="eyebrow">
+              <span aria-hidden="true">✳</span> &nbsp; NEARBY SERVICES
+            </p>
+            <h1>
+              附近服务<span className="heading-dot">.</span>
+            </h1>
+            <p className="subtitle">按距离查看附近的宠物医院、美容和用品店。</p>
+          </div>
+          <span className="heading-illustration" aria-hidden="true">
+            ♡<span>✦</span>
+          </span>
         </header>
         {!started && (
           <section className="nearby-guide" aria-label="开始使用">
-            <h2>从哪里开始？</h2>
+            <div className="panel-title">
+              <div>
+                <span className="section-kicker">GET STARTED</span>
+                <h2>从哪里开始？</h2>
+              </div>
+            </div>
             <p>
               定位仅用于计算你与各地点的距离，不会保存你的位置；也可以主动选择演示区域，浏览内置的示例地点。
             </p>
@@ -269,27 +283,29 @@ export default function NearbyPage({
         {started && (
           <>
             <div className="nearby-toolbar">
-              <fieldset className="nearby-categories">
-                <legend>地点类别</legend>
-                {(Object.keys(categoryLabels) as NearbyCategory[]).map(
-                  (item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      aria-pressed={category === item}
-                      className={
-                        category === item
-                          ? "category-tab active"
-                          : "category-tab"
-                      }
-                      disabled={loading}
-                      onClick={() => changeCategory(item)}
-                    >
-                      {categoryLabels[item]}
-                    </button>
-                  ),
-                )}
-              </fieldset>
+              <div className="nearby-categories">
+                <span>地点类别</span>
+                <div className="category-tabs">
+                  {(Object.keys(categoryLabels) as NearbyCategory[]).map(
+                    (item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-pressed={category === item}
+                        className={
+                          category === item
+                            ? "category-tab active"
+                            : "category-tab"
+                        }
+                        disabled={loading}
+                        onClick={() => changeCategory(item)}
+                      >
+                        {categoryLabels[item]}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
               <label className="nearby-radius">
                 搜索半径
                 <select
@@ -334,6 +350,10 @@ export default function NearbyPage({
             )}
           </>
         )}
+        <footer className="page-footer">
+          <span>MADE FOR THE LITTLE ONES ♡</span>
+          <span>宠爱，从了解开始。</span>
+        </footer>
       </main>
     </>
   );
@@ -388,7 +408,12 @@ function AddressSearch({
 
   return (
     <section className="address-search" aria-label="按地址查找">
-      <h2>或者输入地点或地址查找</h2>
+      <div className="panel-title">
+        <div>
+          <span className="section-kicker">BY ADDRESS</span>
+          <h2>或者输入地点或地址查找</h2>
+        </div>
+      </div>
       <p>
         拒绝定位或不方便使用定位时，可输入地址并从解析候选中选择，再查询附近服务；多条候选由你自行选择，不会自动使用第一条。地址仅用于本次查询，不会保存。
       </p>
@@ -487,7 +512,12 @@ function AddressSearch({
 function PlaceList({ places }: { places: Place[] }) {
   return (
     <section className="nearby-panel" aria-label="地点列表">
-      <h2>地点列表</h2>
+      <div className="panel-title">
+        <div>
+          <span className="section-kicker">PLACES</span>
+          <h2>地点列表</h2>
+        </div>
+      </div>
       <ul className="place-list">
         {places.map((place) => (
           <li key={place.id} className="place-card">
