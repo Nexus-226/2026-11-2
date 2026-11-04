@@ -1,6 +1,6 @@
 # Pet Agent
 
-三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），记录页面已合并（PR #37）；P1-4 提醒后端已合并（PR #38），C 提醒页面已随 PR #39 合并；A 侧 Agent 记录/提醒工具在 PR #42 评审；P1-8 演示数据版附近服务后端已在本 PR 实现（页面集成见 PR #43）；真实高德接入（P1-9）与地址解析未实现，真实 POI 尚未查通。
+三人协作的宠物助手项目。已有宠物资料页面、聊天页面、宠物 CRUD、会话持久化和 Qwen Provider；配置 LLM_API_KEY 时使用真实模型，未配置时使用 MockProvider。P0 已验收完成；P1-1 契约已获 A/C 确认，P1-2 记录后端已合并（PR #34），记录页面已合并（PR #37）；P1-4 提醒后端已合并（PR #38），C 提醒页面已随 PR #39 合并；A 侧 Agent 记录/提醒工具在 PR #42 评审；P1-8 演示数据版附近服务后端已在本 PR 实现（页面集成见 PR #43）；真实高德与 POI/地址双查已接入；P1-10/P1-12 已由 A/B/C 在 [Issue #67](https://github.com/Nexus-226/2026-11-2/issues/67) 确认完成。P1-6 与整个 P1 的收尾另行核对。
 
 ## 目录与分工
 
@@ -21,7 +21,7 @@ docs/                         架构、接口及技术决策
 scripts/                      开发辅助脚本
 ```
 
-A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1；演示数据版附近服务后端已实现并明确标注来源（页面集成见 PR #43），真实高德接入（P1-9）尚未开始，目录预留不代表功能已完成。
+A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与业务服务；C 负责前端和交互。LLM Provider 的边界由 A、B 共同确定。前端通过 FastAPI 访问后端；Agent 通过受控工具和服务访问数据及外部能力。地图查询是 P1；演示数据版附近服务后端已实现并明确标注来源（页面集成见 PR #43），真实高德、手动候选选点与 Agent 附近工具已接入，P1-12 最终验收见 [Issue #67](https://github.com/Nexus-226/2026-11-2/issues/67)。
 
 原始《Pet Agent 架构与开发指南》第 9 节将 A、C 的职责写反；本仓库以当前明确的 **A：Agent、B：后端、C：前端** 分工为准。
 
@@ -53,7 +53,7 @@ A 负责 Agent、工具协议和 LLM 接入；B 负责后端 API、数据库与�
 | `POST /api/v1/chat` | Agent 对话，JSON 回复；有 LLM_API_KEY 使用 Qwen，否则使用 MockProvider | P0，路由与会话存储已实现；模型历史上下文待修复 |
 | `GET/POST /api/v1/records`、`GET/PATCH/DELETE /api/v1/records/{record_id}` | 日常记录查询及 CRUD | P1-2，后端已随 PR #34 合并；前端页面见 PR #37 |
 | `GET/POST /api/v1/reminders`、`GET/PATCH/DELETE /api/v1/reminders/{reminder_id}` | 站内提醒和待办查询及 CRUD | P1-4，后端已随 PR #38 合并；C 页面见 PR #39 |
-| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版后端见 [PR #40](https://github.com/Nexus-226/2026-11-2/pull/40)；页面集成见 PR #43，高德接入待 P1-9 |
+| `GET /api/v1/nearby`、`GET /api/v1/nearby/demo`、`GET /api/v1/places/{place_id}` | 附近服务查询、演示区域查询和地点详情 | P1-8 演示数据版后端见 [PR #40](https://github.com/Nexus-226/2026-11-2/pull/40)；页面见 PR #43，高德及端到端验收见 Issue #67 |
 
 宠物字段、记录/提醒错误格式、A/B 工具边界和地图参数以 [接口契约](docs/API.md) 为准。SQLite 数据默认写入运行目录下的 `pet_agent.db`，可用 `PET_AGENT_DATABASE_URL` 修改连接地址。记录/提醒契约已由 A/C 确认；其他 P1 接口约定仍需三人评审。实现时如有变更，同步更新文档和测试。
 
@@ -120,7 +120,7 @@ npm run format -- src/app/App.tsx
 
 `.gitattributes` 让 Git 新检出或重新写入的文本文件使用 LF，即使本机设置了 `core.autocrlf=true`；已有工作区文件不会立即自动转换。请先保存本地改动，再按需用编辑器或对应格式化工具转换涉及的文件。
 
-应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。当前优先完成 P0 联调验收和上下文修复，再推进 P1 记录、提醒与 Agent 查询；附近服务演示版后端已实现（见下文 P1-8），页面与真实高德接入随后实施。新增功能尚无已实现接口，其契约由 P1-1 另行确认，不在本说明中预设。
+应用启动时会自动执行 Alembic `upgrade head`。开发环境也可在 `backend/` 目录手动运行 `python -m alembic upgrade head`。当前优先完成 P0 联调验收和上下文修复，再推进 P1 记录、提醒与 Agent 查询；附近服务演示版后端已实现（见下文 P1-8），页面与真实高德后续已接入，P1-12 验收见 Issue #67。新增功能尚无已实现接口，其契约由 P1-1 另行确认，不在本说明中预设。
 
 ## P1-3：日常记录页面（C 侧开发）
 
@@ -149,7 +149,7 @@ npm run format -- src/app/App.tsx
 
 需启动包含 PR #40 的后端；前端沿用 Vite 的 `VITE_API_PROXY_TARGET` 代理，无需新增数据模式开关。页面不会自动定位或自动进入演示区域，用户拒绝定位后仍可点击“使用演示区域”。接口错误明确展示，不在前端伪造演示结果。地点与查询中心来源、回退原因及空结果按后端响应展示；定位仅保存在当前页面内存。
 
-手动地址解析、真实地图 SDK、高德接入及 Agent 附近查询不在本次页面范围。P1-8 真实联调已由用户确认通过（2026-11-03），PR #40 已合并，C 页面 PR #43 已合并。
+本段记录 P1-8 首版范围；后续已接入手动地址解析、高德和 Agent 附近查询（见下文及 Issue #67），仍未接入真实地图 SDK。P1-8 真实联调已由用户确认通过（2026-11-03），PR #40 已合并，C 页面 PR #43 已合并。
 
 ## P1-9：高德真实接入（B 侧实现）
 
@@ -160,6 +160,12 @@ npm run format -- src/app/App.tsx
 ## P1-10：定位用途说明与手动地址回退（B/C 协作）
 
 拒绝定位或不便使用定位时，“附近服务”页面提供手动地址回退：输入地址（可选填城市）→ `POST /api/v1/locations/resolve` 解析为候选 → 用户自行选择候选 → 以 `center_source=resolved_address` 查询附近。后端按 Issue #62 冻结契约串行双查高德 v5 `place/text`（地标 POI）与 v3 `geocode/geo`，坐标转换与字段收敛复用 `app/services/amap.py`：候选含 `formatted_address`、`name/city/district/level`、`match_kind`（poi/geocode）、WGS84 `location` 与 `data_source`，按门址级 geocode → POI → 其余 geocode 排序、两路分别去重后上限 5 条，`city` 可选限定城市（未填写为全国搜索）；多条候选全部返回且不自动选择第一条；任一路失败/超时整体 502/504，两路均空 404 `ADDRESS_NOT_FOUND`、输入非法 422 `VALIDATION_ERROR`、未配置高德 503，均不做演示回退或字符串猜坐标。地址与坐标仅用于本次请求，不写入业务数据库或日志；页面明确说明定位用途，地址输入不自动触发任何查询。导航链接由 C 侧把 WGS84 转为 GCJ-02 后生成（`src/lib/coords.ts`，以 eviltransform 同源向量测试），仅在高德真实地点（`data_source: "amap"`）的卡片上提供，用户点击后在新窗口打开；演示地点为虚构数据，不提供导航入口。
+
+
+
+## P1-10 / P1-12 验收完成（2026-11-04）
+
+C 的 [最终验收记录及 A/B 确认](https://github.com/Nexus-226/2026-11-2/issues/67) 已齐备，P1-10/P1-12 已完成。覆盖真实高德三类查询、来源/空结果、城市与 POI 候选选择、中心切换、列表/位置示意图及外部导航终点；后端 233 项、前端 65 项测试与构建通过（记录中的执行结果，本次仅更新文档）。定位成功采用公开坐标模拟回调，未验证设备定位精度或系统权限弹窗；真实模型为抽查，工具硬失败为受控注入，不声称真实高德故障演练。P1-6、其他收尾事项和整个 P1 完成状态另行核对。
 
 ## P2-1：其他宠物具体物种（C 侧候选实现）
 
