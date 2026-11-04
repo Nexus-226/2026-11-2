@@ -2,6 +2,8 @@ import type { PetInput } from "../types/pet";
 
 // Match the backend's Python str.strip(): JS trim() also removes U+FEFF,
 // but omits U+0085 and U+001C–U+001F. Preserve all non-whitespace characters.
+// Keep in sync with backend/app/schemas/pet.py:normalize_other_species;
+// see docs/P2-1-species-contract-draft.md (标准化与输入类型).
 const speciesWhitespace =
   /[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/;
 const speciesEdgeWhitespace = new RegExp(
