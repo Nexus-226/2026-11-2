@@ -1,4 +1,5 @@
 import type { PetRecord, RecordInput, RecordFilter } from "../types/records";
+import { randomId } from "../lib/randomId";
 export const usingDemoRecords =
   import.meta.env.VITE_RECORD_DATA_SOURCE !== "api";
 const key = "pet-agent.demo.records.v1";
@@ -83,7 +84,7 @@ export const recordClient = {
     const now = new Date().toISOString();
     const item = {
       ...input,
-      id: crypto.randomUUID(),
+      id: randomId(),
       created_at: now,
       updated_at: now,
     };

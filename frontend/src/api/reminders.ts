@@ -5,6 +5,7 @@ import type {
   ReminderPatch,
 } from "../types/reminders";
 import { reminderDueGroup } from "../types/reminders";
+import { randomId } from "../lib/randomId";
 
 export const usingDemoReminders =
   import.meta.env.VITE_REMINDER_DATA_SOURCE !== "api";
@@ -100,7 +101,7 @@ export const reminderClient = {
     const now = new Date().toISOString();
     const item: PetReminder = {
       ...input,
-      id: crypto.randomUUID(),
+      id: randomId(),
       status: "pending",
       due_group: reminderDueGroup(input.due_on, "pending"),
       created_at: now,
