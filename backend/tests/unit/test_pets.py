@@ -223,15 +223,32 @@ def test_other_species_always_present_in_read_response(client: TestClient) -> No
     assert client.get("/api/v1/pets").json()[0]["other_species"] is None
 
 
-# P2-1 实施 PR 开放写入路径后：species=other 的请求可携带 other_species，
-# 届时删除本测试并按契约草案补联合校验用例。
-def test_other_species_write_rejected_until_p2_1_implemented(
-    client: TestClient,
-) -> None:
+# P2-1 过渡：写入路径未开放，other_species 在 PetCreate/PetUpdate 中是未知
+# 字段（extra="forbid"）→ 422。这里刻意使用 species=other + other_species=兔
+# ——开放写入后该组合将合法，因此 422 只能来自"写入路径未开放"；若用
+# dog + 非空 other_species，最终联合校验下同样 422，两种原因无法区分。
+# P2-1 实施 PR 开放写入路径后：把下列 POST/PATCH 两例改为成功持久化用例，
+# 并按契约草案补 dog/cat 携带非空、互切未显式清空等联合校验 422 用例
+# （错误消息与未知字段拒绝区分）。
+def test_other_species_write_path_not_open_yet(client: TestClient) -> None:
     response = client.post(
         "/api/v1/pets",
-        json={"name": "豆豆", "species": "dog", "other_species": "兔子"},
+        json={"name": "豆豆", "species": "other", "other_species": "兔"},
     )
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert client.get("/api/v1/pets").json() == []
+
+    created = client.post("/api/v1/pets", json={"name": "毛毛", "species": "other"})
+    assert created.status_code == 201
+    pet_id = created.json()["id"]
+    before = client.get(f"/api/v1/pets/{pet_id}").json()
+
+    patched = client.patch(
+        f"/api/v1/pets/{pet_id}",
+        json={"species": "other", "other_species": "兔"},
+    )
+    assert patched.status_code == 422
+    assert patched.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert client.get(f"/api/v1/pets/{pet_id}").json() == before

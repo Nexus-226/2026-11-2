@@ -82,6 +82,8 @@ class PetRead(BaseModel):
     species: Literal["dog", "cat", "other"]
     # P2-1 过渡：DB 列尚未添加、写入路径未开放；from_attributes 校验缺少该
     # 属性的 ORM 对象时回退默认 null，字段在响应中总是出现。
+    # 完整后端 PR（含迁移）落地后移除默认值，改为与 breed/notes 一致的
+    # 「必填但可空」（str | None），避免漏填路径被默认值静默兜底。
     other_species: str | None = None
     breed: str | None
     birthday: date | None
