@@ -180,7 +180,11 @@ export default function NearbyPage({
       });
       if (requestIdRef.current !== requestId) return;
       setResult(data);
-      setResolvedAddressLabel(match.formatted_address);
+      setResolvedAddressLabel(
+        match.name
+          ? `${match.name} · ${match.formatted_address}`
+          : match.formatted_address,
+      );
     } catch (e) {
       if (requestIdRef.current !== requestId) return;
       setError(msg(e));
@@ -386,33 +390,68 @@ function AddressSearch({
   onSelect: (match: AddressMatch) => void;
 }) {
   const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
   const [matches, setMatches] = useState<AddressMatch[] | null>(null);
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState("");
+  const resolveIdRef = useRef(0);
+  useEffect(() => {
+    if (disabled) {
+      resolveIdRef.current += 1;
+      setResolving(false);
+      setMatches(null);
+      setError("");
+    }
+  }, [disabled]);
+  useEffect(
+    () => () => {
+      resolveIdRef.current += 1;
+    },
+    [],
+  );
 
   async function submit() {
     const text = address.trim();
     if (!text || resolving) return;
+    const requestId = ++resolveIdRef.current;
     setResolving(true);
     setError("");
     setMatches(null);
     try {
-      const result = await resolveAddress(text);
+      const result = await resolveAddress(text, city.trim() || undefined);
+      if (resolveIdRef.current !== requestId) return;
       setMatches(result);
     } catch (e) {
+      if (resolveIdRef.current !== requestId) return;
       setError(msg(e));
     } finally {
-      setResolving(false);
+      if (resolveIdRef.current === requestId) setResolving(false);
     }
   }
 
   return (
     <section className="address-search" aria-label="按地址查找">
-      <h2>或者输入地址查找</h2>
+      <h2>或者输入地点或地址查找</h2>
       <p>
         拒绝定位或不方便使用定位时，可输入地址并从解析候选中选择，再查询附近服务；多条候选由你自行选择，不会自动使用第一条。地址仅用于本次查询，不会保存。
       </p>
       <div className="address-form">
+        <label className="address-label" htmlFor="city-input">
+          城市（可选）
+        </label>
+        <input
+          id="city-input"
+          className="address-input"
+          value={city}
+          disabled={disabled || resolving}
+          maxLength={20}
+          placeholder="例：上海市"
+          onChange={(e) => {
+            setCity(e.target.value);
+            setMatches(null);
+            setError("");
+          }}
+        />
         <label className="address-label" htmlFor="address-input">
           地址
         </label>
@@ -421,14 +460,18 @@ function AddressSearch({
           className="address-input"
           value={address}
           disabled={disabled || resolving}
-          onChange={(e) => setAddress(e.target.value)}
+          onChange={(e) => {
+            setAddress(e.target.value);
+            setMatches(null);
+            setError("");
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
               void submit();
             }
           }}
-          placeholder="例：北京市朝阳区幸福路 12 号"
+          placeholder="例：人民广场，或完整门牌地址"
           maxLength={200}
         />
         <button
@@ -439,9 +482,17 @@ function AddressSearch({
           {resolving ? "解析中…" : "解析地址"}
         </button>
       </div>
+      <p>
+        {city.trim()
+          ? `搜索城市：${city.trim()}`
+          : "未填写城市，将在全国搜索；同名地点请核对城市和地址。"}
+      </p>
+      <p>候选最多五条，第一条不一定准确；即使只有一条，也请核对后点击确认。</p>
       {error && <p role="alert">{error}</p>}
       {matches && matches.length === 0 && (
-        <p role="status">没有返回候选地址，请尝试输入更完整的地址。</p>
+        <p role="status">
+          没有返回候选地址，请补充城市或更完整的地点名称、地址。
+        </p>
       )}
       {matches && matches.length > 0 && (
         <ul className="address-matches">
@@ -449,10 +500,20 @@ function AddressSearch({
             <li key={`${index}-${match.location.lat}-${match.location.lng}`}>
               <button
                 type="button"
-                disabled={disabled}
+                disabled={disabled || resolving}
                 onClick={() => onSelect(match)}
               >
-                <strong>{match.formatted_address}</strong>
+                {match.name && <strong>{match.name}</strong>}
+                <span>{match.formatted_address}</span>
+                <span>
+                  {[match.city, match.district].filter(Boolean).join(" · ") ||
+                    "城市/区县信息未提供，请核对地址"}
+                </span>
+                <span>
+                  {match.match_kind === "poi"
+                    ? "地点搜索结果"
+                    : `地址解析结果 · 精度：${match.level || "未知"}（请核对位置）`}
+                </span>
                 <span>
                   点击使用该地址查询附近（纬度 {match.location.lat.toFixed(4)}
                   ，经度 {match.location.lng.toFixed(4)}）

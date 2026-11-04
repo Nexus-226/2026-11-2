@@ -234,6 +234,11 @@ function addressMatch(
 ): AddressMatch {
   return {
     formatted_address: formatted,
+    name: null,
+    city: null,
+    district: null,
+    level: "门址",
+    match_kind: "geocode",
     location: { lat, lng },
     data_source: "amap",
   };
@@ -249,6 +254,76 @@ function addressResponse(): NearbyResponse {
     fallback_reason: "amap_not_configured",
   });
 }
+
+it("shows disambiguating POI metadata, requires a click, and uses the selected name as center", async () => {
+  mocks.resolveAddress.mockResolvedValue([
+    {
+      ...addressMatch("上海市黄浦区人民大道185号", 31.23, 121.47),
+      name: "上海人民广场",
+      city: "上海市",
+      district: "黄浦区",
+      level: null,
+      match_kind: "poi",
+    },
+    {
+      ...addressMatch("上海市人民广场", 31.24, 121.47),
+      city: "上海市",
+      district: null,
+      level: "道路",
+    },
+  ]);
+  mocks.search.mockResolvedValue(
+    demoResponse({
+      search_center: {
+        source: "resolved_address",
+        label: "所选地址",
+        location: { lat: 31.23, lng: 121.47 },
+      },
+    }),
+  );
+  render(<NearbyPage onNavigate={() => {}} />);
+  expect(screen.getByText(/未填写城市，将在全国搜索/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("城市（可选）"), {
+    target: { value: "上海市" },
+  });
+  fireEvent.change(screen.getByLabelText("地址"), {
+    target: { value: "人民广场" },
+  });
+  fireEvent.click(screen.getByText("解析地址"));
+  await screen.findByText("上海人民广场");
+  expect(screen.getByText("上海市 · 黄浦区")).toBeTruthy();
+  expect(screen.getByText(/地址解析结果 · 精度：道路/)).toBeTruthy();
+  expect(mocks.resolveAddress).toHaveBeenCalledWith("人民广场", "上海市");
+  expect(mocks.search).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("上海人民广场"));
+  await screen.findByText(/查询中心：上海人民广场 · 上海市黄浦区人民大道185号/);
+});
+
+it("clears old candidates on editing and ignores a late resolution after switching to demo", async () => {
+  render(<NearbyPage onNavigate={() => {}} />);
+  mocks.resolveAddress.mockResolvedValue([addressMatch("旧地址", 39.9, 116.4)]);
+  fireEvent.change(screen.getByLabelText("地址"), {
+    target: { value: "旧地址" },
+  });
+  fireEvent.click(screen.getByText("解析地址"));
+  await screen.findByText("旧地址");
+  fireEvent.change(screen.getByLabelText("城市（可选）"), {
+    target: { value: "上海市" },
+  });
+  expect(screen.queryByText("旧地址")).toBeNull();
+  let finish!: (matches: AddressMatch[]) => void;
+  mocks.resolveAddress.mockReturnValue(
+    new Promise<AddressMatch[]>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  fireEvent.click(screen.getByText("解析地址"));
+  fireEvent.click(screen.getByText("使用演示区域"));
+  await screen.findByText(/查询中心：演示区域中心/);
+  await act(async () => finish([addressMatch("迟到地址", 31.2, 121.4)]));
+  expect(screen.queryByText("迟到地址")).toBeNull();
+  expect(mocks.search).not.toHaveBeenCalled();
+});
 
 async function selectAddress() {
   mocks.resolveAddress.mockResolvedValue([
@@ -367,7 +442,7 @@ it("resolves typed address and queries nearby after user picks a candidate", asy
       }),
     ),
   );
-  expect(mocks.resolveAddress).toHaveBeenCalledWith("幸福路 1 号");
+  expect(mocks.resolveAddress).toHaveBeenCalledWith("幸福路 1 号", undefined);
 });
 
 it("shows address resolve errors without querying nearby", async () => {

@@ -1,8 +1,74 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { nearbyClient } from "../src/api/nearby";
+import { nearbyClient, resolveAddress } from "../src/api/nearby";
 
 afterEach(() => vi.unstubAllGlobals());
+
+const match = {
+  formatted_address: "上海市黄浦区人民大道185号",
+  name: "上海人民广场",
+  city: "上海市",
+  district: "黄浦区",
+  level: null,
+  match_kind: "poi",
+  location: { lat: 31.230761, lng: 121.47068 },
+  data_source: "amap",
+};
+
+it("passes trimmed explicit city and accepts all candidate fields", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue({ ok: true, json: async () => ({ matches: [match] }) });
+  vi.stubGlobal("fetch", fetcher);
+  expect(await resolveAddress(" 人民广场 ", " 上海市 ")).toEqual([match]);
+  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
+    address: "人民广场",
+    city: "上海市",
+  });
+  await resolveAddress("人民广场", "  ");
+  expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({
+    address: "人民广场",
+  });
+});
+
+it.each([
+  { ...match, match_kind: "unknown" },
+  { ...match, level: [] },
+  { ...match, city: undefined },
+  { ...match, name: 42 },
+])("rejects malformed candidate metadata %#", async (candidate) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ matches: [candidate] }),
+    }),
+  );
+  await expect(resolveAddress("人民广场")).rejects.toThrow(
+    "地址解析返回格式错误",
+  );
+});
+
+it.each([404, 502, 504, 503])(
+  "preserves HTTP %s error instead of returning candidates",
+  async (status) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status,
+        json: async () => ({
+          error: {
+            message: status === 404 ? "未找到匹配地址" : "地点解析暂不可用",
+          },
+        }),
+      }),
+    );
+    await expect(resolveAddress("人民广场")).rejects.toThrow(
+      status === 404 ? "未找到匹配地址" : "地点解析暂不可用",
+    );
+  },
+);
 
 it("passes the exact query center and category without switching to demo on failure", async () => {
   const fetcher = vi.fn().mockResolvedValue({
