@@ -47,9 +47,7 @@ it("queries unlinked separately and explicitly scopes pet queries", async () => 
   fireEvent.change(screen.getByLabelText("宠物范围"), {
     target: { value: "p" },
   });
-  await waitFor(() =>
-    expect(mocks.list).toHaveBeenLastCalledWith({ pet_id: "p" }),
-  );
+  await waitFor(() => expect(mocks.list).toHaveBeenCalledWith({ pet_id: "p" }));
 });
 it("keeps input on failure and clears weight when changing record type", async () => {
   mocks.create

@@ -161,4 +161,6 @@ npm run format -- src/app/App.tsx
 
 拒绝定位或不便使用定位时，“附近服务”页面提供手动地址回退：输入地址（可选填城市）→ `POST /api/v1/locations/resolve` 解析为候选 → 用户自行选择候选 → 以 `center_source=resolved_address` 查询附近。后端按 Issue #62 冻结契约串行双查高德 v5 `place/text`（地标 POI）与 v3 `geocode/geo`，坐标转换与字段收敛复用 `app/services/amap.py`：候选含 `formatted_address`、`name/city/district/level`、`match_kind`（poi/geocode）、WGS84 `location` 与 `data_source`，按门址级 geocode → POI → 其余 geocode 排序、两路分别去重后上限 5 条，`city` 可选限定城市（未填写为全国搜索）；多条候选全部返回且不自动选择第一条；任一路失败/超时整体 502/504，两路均空 404 `ADDRESS_NOT_FOUND`、输入非法 422 `VALIDATION_ERROR`、未配置高德 503，均不做演示回退或字符串猜坐标。地址与坐标仅用于本次请求，不写入业务数据库或日志；页面明确说明定位用途，地址输入不自动触发任何查询。导航链接由 C 侧把 WGS84 转为 GCJ-02 后生成（`src/lib/coords.ts`，以 eviltransform 同源向量测试），仅在高德真实地点（`data_source: "amap"`）的卡片上提供，用户点击后在新窗口打开；演示地点为虚构数据，不提供导航入口。
 
+## P2-2：体重趋势图（本地开发）
 
+日常记录页选择具体宠物后可查看体重趋势，支持近 30 天、近 90 天及全部记录。图表独立于时间线类型/日期筛选，按实际发生日期绘制，公斤为统一单位；同日多次称重保留全部明细。保存、修改、删除后随记录一起刷新。空范围可点击“添加体重记录”，加载失败可单独重试。图表只展示称重变化，不提供诊断。数据来源沿用 `VITE_RECORD_DATA_SOURCE`；真实记录需同时设置 `VITE_PET_DATA_SOURCE=api`。当前仅本地开发与模拟测试，真实接口及浏览器视觉验收待完成，尚未合并交付。
