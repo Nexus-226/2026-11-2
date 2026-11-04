@@ -36,6 +36,7 @@
   "id": "b8f34f24-f5cf-4b5c-8d40-073541725a11",
   "name": "豆豆",
   "species": "dog",
+  "other_species": null,
   "breed": "金毛",
   "birthday": "2023-05-01",
   "notes": "对鸡肉过敏",
@@ -45,6 +46,8 @@
 ```
 
 `name` 为去除首尾空格后 1–50 字符；`species` 为 `dog`、`cat`、`other`。其余可选字段在响应中总是出现：`breed`、`notes` 为字符串或 `null`（最长分别 100、2000 字符），`birthday` 为 `YYYY-MM-DD` 日期或 `null`，不得晚于当天。创建时省略可选字段等同 `null`。时间戳为 UTC，并以 `Z` 结尾。
+
+P2-1 过渡：`Pet` 响应已包含 `other_species`（`null` 或具体物种字符串，`species` 为 `other` 时的补充说明）。写入路径尚未开放——创建或更新请求携带 `other_species` 按未知字段返回 `422`，当前值恒为 `null`。最终读写语义以 PR #63 中的契约草案为准，实施 PR 合并后本段移除。
 
 ### P0 最终决定：生日和备注字段
 

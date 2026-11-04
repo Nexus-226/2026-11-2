@@ -60,6 +60,7 @@ def test_pet_crud_persists_across_requests(client: TestClient, tmp_path: Path) -
         "id",
         "name",
         "species",
+        "other_species",
         "breed",
         "birthday",
         "notes",
@@ -212,3 +213,25 @@ def test_init_db_migrates_existing_pet_table(tmp_path: Path) -> None:
         assert migrated_pet.user_id == DEFAULT_USER_ID
         assert session.get(User, DEFAULT_USER_ID) is not None
     engine.dispose()
+
+
+def test_other_species_always_present_in_read_response(client: TestClient) -> None:
+    response = client.post("/api/v1/pets", json={"name": "毛毛", "species": "other"})
+
+    assert response.status_code == 201
+    assert response.json()["other_species"] is None
+    assert client.get("/api/v1/pets").json()[0]["other_species"] is None
+
+
+# P2-1 实施 PR 开放写入路径后：species=other 的请求可携带 other_species，
+# 届时删除本测试并按契约草案补联合校验用例。
+def test_other_species_write_rejected_until_p2_1_implemented(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/pets",
+        json={"name": "豆豆", "species": "dog", "other_species": "兔子"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
