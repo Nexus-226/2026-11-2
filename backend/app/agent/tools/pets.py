@@ -28,13 +28,19 @@ def make_pet_tools(service: PetService) -> list[Tool]:
     return [
         Tool(
             name="get_pet_profile",
-            description="按 pet_id 读取单个宠物资料。",
+            description=(
+                "按 pet_id 读取单个宠物资料；species 为 other 时，具体物种在 "
+                "other_species 字段。"
+            ),
             input_schema=GetPetProfileInput,
             func=get_pet_profile,
         ),
         Tool(
             name="list_pets",
-            description="列出全部宠物资料，无结果返回空列表。",
+            description=(
+                "列出全部宠物资料，无结果返回空列表；每条含 species 与 other_species，"
+                "other 宠物具体物种见 other_species。"
+            ),
             input_schema=ListPetsInput,
             func=list_pets,
         ),
