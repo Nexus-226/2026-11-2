@@ -176,11 +176,22 @@ export default function RecordsPage({
             ♡<span>✦</span>
           </span>
         </header>
-        <p className="records-source">
-          {usingDemoRecords
-            ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"
-            : "后端 API 数据 · 以服务端保存结果为准"}
-        </p>
+        <div
+          className={`mode-banner ${usingDemoRecords ? "demo" : "connected"}`}
+          role="status"
+        >
+          <span className="mode-dot" aria-hidden="true" />
+          <div>
+            <strong>
+              {usingDemoRecords ? "本地演示数据" : "后端 API 数据"}
+            </strong>
+            <span>
+              {usingDemoRecords
+                ? "仅保存在当前浏览器，不同步后端"
+                : "以服务端保存结果为准"}
+            </span>
+          </div>
+        </div>
         {mismatch && (
           <p role="alert">
             API 记录需要设置 VITE_PET_DATA_SOURCE=api

@@ -5,11 +5,8 @@
   color: #253d39;
   font-size: var(--font-size-base);
 }
-.reminders-source {
-  background: #edf4ed;
-  padding: 16px;
-  border-radius: 12px;
-  margin: 0 0 22px;
+.reminders-panel > p {
+  color: #9ba89c;
 }
 .reminders-filters {
   display: flex;

@@ -228,11 +228,22 @@ export default function RemindersPage({
             ♡<span>✦</span>
           </span>
         </header>
-        <p className="reminders-source">
-          {usingDemoReminders
-            ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"
-            : "后端 API 数据 · 以服务端保存结果为准"}
-        </p>
+        <div
+          className={`mode-banner ${usingDemoReminders ? "demo" : "connected"}`}
+          role="status"
+        >
+          <span className="mode-dot" aria-hidden="true" />
+          <div>
+            <strong>
+              {usingDemoReminders ? "本地演示数据" : "后端 API 数据"}
+            </strong>
+            <span>
+              {usingDemoReminders
+                ? "仅保存在当前浏览器，不同步后端"
+                : "以服务端保存结果为准"}
+            </span>
+          </div>
+        </div>
         {mismatch && (
           <p role="alert">
             API 提醒需要设置 VITE_PET_DATA_SOURCE=api

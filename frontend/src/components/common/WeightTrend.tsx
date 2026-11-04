@@ -106,6 +106,7 @@ export default function WeightTrend({
     <section className="records-panel weight-trend" aria-label="体重趋势">
       <div className="weight-heading">
         <div>
+          <span className="section-kicker">WEIGHT TREND</span>
           <h2>体重趋势</h2>
           <p>
             {petId ? petName : "请选择具体宠物查看趋势"} ·{" "}

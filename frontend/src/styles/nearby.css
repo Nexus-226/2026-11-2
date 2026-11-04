@@ -12,7 +12,7 @@
   display: grid;
   gap: 12px;
 }
-.nearby-guide div {
+.nearby-guide > div:not(.panel-title) {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
