@@ -159,6 +159,6 @@ npm run format -- src/app/App.tsx
 
 ## P1-10：定位用途说明与手动地址回退（B/C 协作）
 
-拒绝定位或不便使用定位时，“附近服务”页面提供手动地址回退：输入地址 → `POST /api/v1/locations/resolve` 解析为 WGS84 候选 → 用户自行选择候选 → 以 `center_source=resolved_address` 查询附近。后端通过高德 v3 `geocode/geo` 解析，坐标转换与字段收敛复用 `app/services/amap.py`：候选仅含 `formatted_address`、WGS84 `location` 与 `data_source`，多条候选全部返回且不自动选择第一条；无匹配 404 `ADDRESS_NOT_FOUND`、输入非法 422 `VALIDATION_ERROR`、未配置高德 503、上游失败/超时 502/504，均不做演示回退或字符串猜坐标。地址与坐标仅用于本次请求，不写入业务数据库或日志；页面明确说明定位用途，地址输入不自动触发任何查询。导航链接由 C 侧把 WGS84 转为 GCJ-02 后生成（`src/lib/coords.ts`，以 eviltransform 同源向量测试），仅在高德真实地点（`data_source: "amap"`）的卡片上提供，用户点击后在新窗口打开；演示地点为虚构数据，不提供导航入口。
+拒绝定位或不便使用定位时，“附近服务”页面提供手动地址回退：输入地址（可选填城市）→ `POST /api/v1/locations/resolve` 解析为候选 → 用户自行选择候选 → 以 `center_source=resolved_address` 查询附近。后端按 Issue #62 冻结契约串行双查高德 v5 `place/text`（地标 POI）与 v3 `geocode/geo`，坐标转换与字段收敛复用 `app/services/amap.py`：候选含 `formatted_address`、`name/city/district/level`、`match_kind`（poi/geocode）、WGS84 `location` 与 `data_source`，按门址级 geocode → POI → 其余 geocode 排序、两路分别去重后上限 5 条，`city` 可选限定城市（未填写为全国搜索）；多条候选全部返回且不自动选择第一条；任一路失败/超时整体 502/504，两路均空 404 `ADDRESS_NOT_FOUND`、输入非法 422 `VALIDATION_ERROR`、未配置高德 503，均不做演示回退或字符串猜坐标。地址与坐标仅用于本次请求，不写入业务数据库或日志；页面明确说明定位用途，地址输入不自动触发任何查询。导航链接由 C 侧把 WGS84 转为 GCJ-02 后生成（`src/lib/coords.ts`，以 eviltransform 同源向量测试），仅在高德真实地点（`data_source: "amap"`）的卡片上提供，用户点击后在新窗口打开；演示地点为虚构数据，不提供导航入口。
 
 
