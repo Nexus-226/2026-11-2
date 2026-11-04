@@ -176,3 +176,13 @@ def test_demo_region_is_invalid_center_source_for_tool() -> None:
 def test_nearby_tool_absent_without_service() -> None:
     registry = build_default_registry(FakePetService())
     assert "search_nearby_pet_services" not in registry.names()
+
+
+def test_nearby_tool_description_limits_demo_fallback_and_navigation() -> None:
+    registry = build_default_registry(
+        FakePetService(), nearby_service=FakeNearbyService()
+    )
+    description = registry.get("search_nearby_pet_services").description
+    assert "不得据此判断真实附近有没有服务" in description
+    assert "不要建议用户重新定位" in description
+    assert "启用导航" in description

@@ -40,11 +40,14 @@ def make_nearby_tools(service: NearbyService) -> list[Tool]:
                 "返回 NearbyResponse：places 地点列表（含 distance_m 距离、电话、"
                 "营业状态、导航链接）、search_center 查询中心、source 数据来源"
                 "（amap 真实 / demo 演示）、fallback_reason 回退原因。"
-                "只引用返回的地点，缺失字段标为未知；演示数据或回退状态要如实告知，"
-                "不能说成实时结果；导航链接只能由用户主动打开。查询失败会返回错误，"
-                "不要把失败说成没有结果。"
-                "source=demo 且 fallback_reason 非空、places 为空时，只能说明演示数据中"
-                "没有该范围内的地点，不能推断真实附近没有服务，应说明实时服务未接入/不可用。"
+                "只引用返回的地点，缺失字段标为未知；数据来源 source 与回退原因 "
+                "fallback_reason 要如实告知，演示数据不能说成实时结果。"
+                "source=demo 时无论 places 是否为空，都不得据此判断真实附近有没有服务；"
+                "fallback_reason 表示后端高德未配置（amap_not_configured）或不可用"
+                "（amap_unavailable），应说明是服务端问题、当前为演示数据，不要建议用户"
+                "重新定位或输入地址来恢复真实结果。navigation_url=null 时不要说能启用"
+                "导航或生成链接，只提示用户去页面真实地点卡片自带的导航入口手动打开。"
+                "查询失败会返回错误，不要把失败说成没有结果。"
             ),
             input_schema=SearchNearbyPetServicesInput,
             func=search_nearby_pet_services,
