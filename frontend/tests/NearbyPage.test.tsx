@@ -150,18 +150,6 @@ it("shows source labeling for demo region results", async () => {
   expect(mocks.searchDemoRegion).toHaveBeenCalledWith("pet_hospital", 3000);
 });
 
-it("syncs selection between list and schematic map", async () => {
-  render(<NearbyPage onNavigate={() => {}} />);
-  await screen.findByText("使用演示区域");
-  fireEvent.click(screen.getByText("使用演示区域"));
-  await screen.findByText("演示动物医院（示例）");
-  fireEvent.click(screen.getByText("演示动物医院（示例）"));
-  const marker = screen.getByRole("button", { name: /，距离 480 m$/ });
-  expect(marker.getAttribute("aria-pressed")).toBe("true");
-  const card = screen.getByRole("button", { name: /示例市演示区和平街 1 号/ });
-  expect(card.getAttribute("aria-pressed")).toBe("true");
-});
-
 it("suggests demo region when geolocation is denied", async () => {
   geo.getCurrentPosition.mockImplementation(
     (_success: unknown, onError: (e: unknown) => void) => {
@@ -523,8 +511,7 @@ it("offers user-triggered amap navigation only for real places", async () => {
   );
   render(<NearbyPage onNavigate={() => {}} />);
   fireEvent.click(screen.getByText("使用演示区域"));
-  // 地点名称同时出现在列表卡片与地图标记中，因此断言为“至少出现一次”。
-  await screen.findAllByText("安心宠物医院");
+  await screen.findByText("安心宠物医院");
   const nav = screen.getByRole("link", { name: /安心宠物医院的高德导航/ });
   const href = nav.getAttribute("href");
   // 导航链接由前端把 WGS84 转为 GCJ-02 后指向高德路径规划页，仅用户点击时打开；

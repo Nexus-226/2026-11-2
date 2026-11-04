@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import { nearbyClient, resolveAddress } from "../api/nearby";
 import {
@@ -82,22 +82,6 @@ function navigationHref(place: Place): string {
 
 type LoadMode = "locate" | "demo" | "address";
 
-interface MapPoint {
-  place: Place;
-  x: number;
-  y: number;
-}
-
-function schematicPoints(result: NearbyResponse): MapPoint[] {
-  const center = result.search_center.location;
-  const cosLat = Math.cos((center.lat * Math.PI) / 180);
-  return result.places.map((place) => ({
-    place,
-    x: (place.location.lng - center.lng) * 111320 * cosLat,
-    y: (center.lat - place.location.lat) * 111320,
-  }));
-}
-
 export default function NearbyPage({
   onNavigate,
 }: {
@@ -110,7 +94,6 @@ export default function NearbyPage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [started, setStarted] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const modeRef = useRef<LoadMode | null>(null);
   const requestIdRef = useRef(0);
   const centerRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -130,7 +113,6 @@ export default function NearbyPage({
     setError("");
     setResult(null);
     setResolvedAddressLabel("");
-    setSelectedId(null);
     try {
       let data: NearbyResponse;
       if (mode === "locate") {
@@ -169,7 +151,6 @@ export default function NearbyPage({
     setError("");
     setResult(null);
     setResolvedAddressLabel("");
-    setSelectedId(null);
     try {
       const data = await nearbyClient.search({
         lat: match.location.lat,
@@ -216,13 +197,6 @@ export default function NearbyPage({
   function retry() {
     reload(category, radius);
   }
-
-  const points = result ? schematicPoints(result) : [];
-  const maxAbs = Math.max(
-    1,
-    ...points.flatMap((point) => [Math.abs(point.x), Math.abs(point.y)]),
-  );
-  const scale = 108 / maxAbs;
 
   return (
     <>
@@ -356,24 +330,7 @@ export default function NearbyPage({
                       : "当前查询范围内没有匹配地点，可放大半径或换一类地点。"}
                   </p>
                 ) : (
-                  <div className="nearby-layout">
-                    <PlaceList
-                      places={result.places}
-                      selectedId={selectedId}
-                      onSelect={setSelectedId}
-                    />
-                    <MapBoundary
-                      key={result.search_center.source + category + radius}
-                    >
-                      <SchematicMap
-                        points={points}
-                        centerLabel={result.search_center.label}
-                        scale={scale}
-                        selectedId={selectedId}
-                        onSelect={setSelectedId}
-                      />
-                    </MapBoundary>
-                  </div>
+                  <PlaceList places={result.places} />
                 )}
               </>
             )}
@@ -529,45 +486,26 @@ function AddressSearch({
   );
 }
 
-function PlaceList({
-  places,
-  selectedId,
-  onSelect,
-}: {
-  places: Place[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
+function PlaceList({ places }: { places: Place[] }) {
   return (
     <section className="nearby-panel" aria-label="地点列表">
       <h2>地点列表</h2>
       <ul className="place-list">
         {places.map((place) => (
-          <li key={place.id}>
-            <button
-              type="button"
-              className={
-                selectedId === place.id ? "place-card selected" : "place-card"
-              }
-              aria-pressed={selectedId === place.id}
-              onClick={() =>
-                onSelect(selectedId === place.id ? null : place.id)
-              }
-            >
-              <span className="place-top">
-                <strong>{place.name}</strong>
-                <span className="place-distance">
-                  {formatDistance(place.distance_m)}
-                </span>
+          <li key={place.id} className="place-card">
+            <div className="place-top">
+              <strong>{place.name}</strong>
+              <span className="place-distance">
+                {formatDistance(place.distance_m)}
               </span>
-              <span className="place-meta">
-                {categoryLabels[place.category]} ·{" "}
-                {businessLabels[place.business_status]} ·{" "}
-                {place.data_source === "demo" ? "演示数据" : "实时数据"}
-              </span>
-              <span>{place.address}</span>
-              <span>{place.phone ?? "暂无电话"}</span>
-            </button>
+            </div>
+            <span className="place-meta">
+              {categoryLabels[place.category]} ·{" "}
+              {businessLabels[place.business_status]} ·{" "}
+              {place.data_source === "demo" ? "演示数据" : "实时数据"}
+            </span>
+            <span>{place.address}</span>
+            <span>{place.phone ?? "暂无电话"}</span>
             {place.data_source === "amap" && (
               <a
                 className="place-nav"
@@ -584,84 +522,4 @@ function PlaceList({
       </ul>
     </section>
   );
-}
-
-function SchematicMap({
-  points,
-  centerLabel,
-  scale,
-  selectedId,
-  onSelect,
-}: {
-  points: MapPoint[];
-  centerLabel: string;
-  scale: number;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  return (
-    <section className="nearby-panel" aria-label="位置示意图">
-      <h2>位置示意图</h2>
-      <p className="map-note">
-        按查询中心的相对位置绘制，非真实地图；标记与列表来自同一份结果。
-      </p>
-      <svg
-        className="nearby-map-svg"
-        viewBox="-140 -140 280 280"
-        role="img"
-        aria-label={`位置示意图，共 ${points.length} 个地点`}
-      >
-        <circle cx={0} cy={0} r={5} className="map-center-dot" />
-        <text x={0} y={20} textAnchor="middle" className="map-center-label">
-          {centerLabel}
-        </text>
-        {points.map((point) => {
-          const cx = point.x * scale;
-          const cy = point.y * scale;
-          const selected = selectedId === point.place.id;
-          return (
-            <g
-              key={point.place.id}
-              role="button"
-              tabIndex={0}
-              className={selected ? "map-marker selected" : "map-marker"}
-              aria-pressed={selected}
-              aria-label={`${point.place.name}，距离 ${formatDistance(point.place.distance_m)}`}
-              onClick={() => onSelect(selected ? null : point.place.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onSelect(selected ? null : point.place.id);
-                }
-              }}
-            >
-              <circle cx={cx} cy={cy} r={selected ? 9 : 6} />
-              <text x={cx} y={cy - 13} textAnchor="middle">
-                {point.place.name.length > 8
-                  ? `${point.place.name.slice(0, 8)}…`
-                  : point.place.name}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </section>
-  );
-}
-
-class MapBoundary extends Component<
-  { children: ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  render() {
-    return this.state.failed ? (
-      <p role="status">位置示意图暂时无法显示，请使用地点列表。</p>
-    ) : (
-      this.props.children
-    );
-  }
 }
