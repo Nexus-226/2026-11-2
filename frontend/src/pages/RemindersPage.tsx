@@ -215,9 +215,11 @@ export default function RemindersPage({
       />
       <main className="reminders-page">
         <header>
-          <p>REMINDERS</p>
+          <p className="eyebrow">
+            <span aria-hidden="true">✳</span> &nbsp; REMINDERS
+          </p>
           <h1>待办提醒</h1>
-          <p>计划要做的护理事项，到期前提醒你。</p>
+          <p className="subtitle">计划要做的护理事项，到期前提醒你。</p>
           <p className="reminders-source">
             {usingDemoReminders
               ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"

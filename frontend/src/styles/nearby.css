@@ -3,6 +3,7 @@
   margin: 40px auto;
   padding: 0 24px 60px;
   color: #253d39;
+  font-size: var(--font-size-base);
 }
 .nearby-guide {
   background: #edf4ed;
@@ -25,7 +26,7 @@
 }
 .nearby-actions span {
   color: #5c6f68;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 .nearby-page button {
   padding: 10px 16px;
@@ -59,7 +60,8 @@
 .nearby-radius {
   display: grid;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
 }
 .category-tab.active {
   background: #253d39;
@@ -82,7 +84,7 @@
 }
 .nearby-center {
   color: #5c6f68;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 .nearby-empty {
   background: white;
@@ -101,6 +103,13 @@
   border: 1px solid #e0e7df;
   border-radius: 18px;
   min-width: 0;
+}
+.nearby-panel h2,
+.nearby-guide h2 {
+  margin: 0 0 16px;
+  font-size: var(--font-size-lg);
+  letter-spacing: var(--letter-spacing-heading);
+  font-weight: var(--font-weight-bold);
 }
 .place-list {
   list-style: none;
@@ -131,11 +140,11 @@
 }
 .place-meta {
   color: #5c6f68;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 .map-note {
   color: #5c6f68;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
 }
 .nearby-map-svg {
   width: 100%;
@@ -175,13 +184,15 @@
   gap: 10px;
 }
 .address-search h2 {
-  margin: 0;
-  font-size: 18px;
+  margin: 0 0 6px;
+  font-size: var(--font-size-lg);
+  letter-spacing: var(--letter-spacing-heading);
+  font-weight: var(--font-weight-bold);
 }
 .address-search p {
   margin: 0;
   color: #5c6f68;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 .address-form {
   display: flex;
@@ -190,7 +201,8 @@
   align-items: center;
 }
 .address-label {
-  font-size: 14px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
 }
 .address-input {
   flex: 1 1 260px;
@@ -216,7 +228,7 @@
 }
 .address-matches span {
   color: #5c6f68;
-  font-size: 13px;
+  font-size: var(--font-size-base);
 }
 .place-list li {
   display: grid;
@@ -225,7 +237,8 @@
 .place-nav {
   justify-self: start;
   color: #1f6f43;
-  font-size: 14px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
 }
 @media (max-width: 900px) {
   .nearby-layout {

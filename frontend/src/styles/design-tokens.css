@@ -1,0 +1,36 @@
+/* 排版设计令牌（Typography tokens）
+   提取自「宠物助手」「宠物档案」基准页（src/styles/main.css）的现有实现，
+   不新造一套字体规范。仅承载字体族、字号、字重、行高、字间距，
+   不承载颜色/间距/圆角，避免与既有样式重复定义。 */
+
+:root {
+  /* 字体族 */
+  --font-family-base: "DM Sans", "Microsoft YaHei", sans-serif;
+  --font-family-display: "Manrope", sans-serif;
+
+  /* 字号层级 */
+  --font-size-xs: 10px; /* 眉题/overline、页脚 */
+  --font-size-sm: 11px; /* 辅助说明、提示 */
+  --font-size-base: 13px; /* 正文、按钮、表单 */
+  --font-size-md: 14px; /* 副标题 */
+  --font-size-lg: 20px; /* 面板/卡片标题 h2 */
+  --font-size-xl: 24px; /* 表单大标题 */
+  --font-size-2xl: clamp(28px, 3.2vw, 42px); /* 页面主标题 h1 */
+
+  /* 字重 */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  /* 行高 */
+  --line-height-tight: 1.3;
+  --line-height-base: 1.5;
+  --line-height-relaxed: 1.7;
+
+  /* 字间距 */
+  --letter-spacing-title: -0.055em; /* 页面主标题 */
+  --letter-spacing-heading: -0.04em; /* 面板/卡片标题 */
+  --letter-spacing-overline: 0.17em; /* 英文小标 eyebrow/kicker */
+}

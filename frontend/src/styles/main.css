@@ -1,5 +1,5 @@
 :root {
-  font-family: "DM Sans", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-family-base);
   color: #283731;
   background: #f6f8f3;
   font-synthesis: none;

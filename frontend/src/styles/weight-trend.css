@@ -10,11 +10,14 @@
 }
 .weight-heading h2 {
   margin: 0;
+  font-size: var(--font-size-lg);
+  letter-spacing: var(--letter-spacing-heading);
+  font-weight: var(--font-weight-bold);
 }
 .weight-heading p,
 .weight-footnote {
   color: #596e66;
-  font-size: 14px;
+  font-size: var(--font-size-base);
 }
 .weight-trend button[aria-pressed="true"] {
   background: #253d39;

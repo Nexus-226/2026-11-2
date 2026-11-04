@@ -3,6 +3,7 @@
   margin: 40px auto;
   padding: 0 24px 60px;
   color: #253d39;
+  font-size: var(--font-size-base);
 }
 .reminders-source {
   background: #edf4ed;
@@ -19,6 +20,7 @@
 .reminders-page label {
   display: grid;
   gap: 8px;
+  font-weight: var(--font-weight-bold);
 }
 .reminders-page input,
 .reminders-page select,
@@ -55,6 +57,12 @@
   border: 1px solid #e0e7df;
   border-radius: 18px;
 }
+.reminders-panel h2 {
+  margin: 0 0 18px;
+  font-size: var(--font-size-lg);
+  letter-spacing: var(--letter-spacing-heading);
+  font-weight: var(--font-weight-bold);
+}
 .reminders-panel fieldset {
   border: 0;
   padding: 0;
@@ -67,7 +75,8 @@
 }
 .reminder-group h3 {
   margin: 0 0 12px;
-  font-size: 1rem;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
   color: #45615a;
 }
 .reminder-group ul {
@@ -85,7 +94,7 @@
 }
 .reminder-source {
   color: #5a7169;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 .reminder-actions {
   margin-top: 10px;

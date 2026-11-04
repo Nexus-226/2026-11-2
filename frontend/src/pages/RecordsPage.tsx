@@ -163,9 +163,11 @@ export default function RecordsPage({
       />
       <main className="records-page">
         <header>
-          <p>CARE JOURNAL</p>
+          <p className="eyebrow">
+            <span aria-hidden="true">✳</span> &nbsp; CARE JOURNAL
+          </p>
           <h1>日常记录</h1>
-          <p>保存已经发生的护理和体重变化。</p>
+          <p className="subtitle">保存已经发生的护理和体重变化。</p>
           <p className="records-source">
             {usingDemoRecords
               ? "本地演示数据 · 仅保存在当前浏览器，不同步后端"
