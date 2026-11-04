@@ -72,9 +72,9 @@ it("renders a single point and keeps same-day readings, sorting dates and isolat
   await screen.findByText("3 条称重记录");
   expect(screen.queryByText("再记录一次即可查看变化。")).toBeNull();
   expect(screen.queryByRole("button", { name: /99 kg/ })).toBeNull();
-  expect(screen.getByText("+0.4 kg")).toBeTruthy();
+  expect(screen.getByText("+0.40 kg")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "2026-11-04，4.3 kg" }));
-  expect(screen.getByText("选中记录：2026-11-04 · 4.3 kg")).toBeTruthy();
+  expect(screen.getByText("选中记录：2026-11-04 · 4.30 kg")).toBeTruthy();
   fireEvent.click(screen.getByText("近30天"));
   await waitFor(() =>
     expect(list).toHaveBeenLastCalledWith(

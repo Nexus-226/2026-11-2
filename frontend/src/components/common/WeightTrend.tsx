@@ -4,20 +4,24 @@ import { shanghaiToday, type PetRecord } from "../../types/records";
 import "../../styles/weight-trend.css";
 
 const day = (date: string) => Date.parse(`${date}T00:00:00Z`);
-const format = (value: number) => Number(value.toFixed(2)).toString();
+const format = (value: number) => value.toFixed(2);
 
 export default function WeightTrend({
   petId,
   petName,
   revision,
   onAdd,
+  initialRange = "90",
+  onRangeChange,
 }: {
   petId: string | null;
   petName: string;
   revision: number;
   onAdd: () => void;
+  initialRange?: string;
+  onRangeChange?: (range: string) => void;
 }) {
-  const [range, setRange] = useState("90");
+  const [range, setRange] = useState(initialRange);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
     loading: boolean;
@@ -118,7 +122,10 @@ export default function WeightTrend({
               <button
                 key={value}
                 aria-pressed={range === value}
-                onClick={() => setRange(value)}
+                onClick={() => {
+                  setRange(value);
+                  onRangeChange?.(value);
+                }}
               >
                 {label}
               </button>
@@ -151,7 +158,7 @@ export default function WeightTrend({
               <span>{last.occurred_on}</span>
             </div>
             <div>
-              较区间首次
+              较区间最早一条称重
               <strong>
                 {items.length > 1
                   ? `${last.weight_kg! - first.weight_kg! > 0 ? "+" : ""}${format(last.weight_kg! - first.weight_kg!)} kg`
@@ -257,7 +264,8 @@ export default function WeightTrend({
             </div>
           </details>
           <p className="weight-footnote">
-            同日全部称重点保留，折线仅连接每日最后创建的一条；重叠点可查看明细。连线不代表期间每日体重，趋势不用于诊断。
+            同日全部称重点保留，折线每天取接口同日列表首条（创建时间相同时按 ID
+            决定）；重叠点可查看明细。连线不代表期间每日体重，趋势不用于诊断。
           </p>
         </>
       )}

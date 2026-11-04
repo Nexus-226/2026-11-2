@@ -42,6 +42,7 @@ export default function RecordsPage({
     [name, setName] = useState(""),
     [weight, setWeight] = useState(""),
     [notes, setNotes] = useState("");
+  const [trendRange, setTrendRange] = useState("90");
   const mismatch = !usingDemoRecords && usingDemoData;
   useEffect(() => {
     let live = true;
@@ -243,6 +244,8 @@ export default function RecordsPage({
         </section>
         <WeightTrend
           key={scope}
+          initialRange={trendRange}
+          onRangeChange={setTrendRange}
           petId={
             scope !== "unlinked" &&
             !mismatch &&
