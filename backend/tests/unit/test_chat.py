@@ -181,6 +181,44 @@ def test_run_chat_prompt_limits_nearby_demo_fallback() -> None:
     assert "启用导航" in prompt
 
 
+def test_run_chat_prompt_forbids_relative_day_counting() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "未来七天有哪些安排？",
+        None,
+        FakePetService([]),
+        provider=CapturingProvider(),
+    )
+    assert "occurred_on" in captured["system_prompt"]
+    assert "due_on" in captured["system_prompt"]
+    assert "第几天" in captured["system_prompt"]
+
+
+def test_run_chat_prompt_enforces_readonly() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "帮我设置一个提醒。",
+        None,
+        FakePetService([]),
+        provider=CapturingProvider(),
+    )
+    assert "不能创建或修改提醒" in captured["system_prompt"]
+    assert "不要主动提议" in captured["system_prompt"]
+    assert "需要我帮您设置提醒吗" in captured["system_prompt"]
+
+
 class HistoryCapturingProvider:
     def __init__(self) -> None:
         self.history: list[ChatHistoryMessage] | None = None
