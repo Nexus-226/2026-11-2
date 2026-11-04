@@ -1,6 +1,6 @@
 # Pet Agent 接口约定 v1
 
-> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图演示版后端与页面已随 PR #40/#43 合并，P1-9 高德真实接入（POI 查询与详情）由本 PR 实现，`/locations/resolve` 地址解析待 P1-10。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端已随 PR #34 合并，提醒后端已随 PR #38 合并（C 提醒页面已随 PR #39 合并）。其他约定仍需三人评审，接口变更先在 PR 中同步三人。
+> 供 A（Agent）、B（后端）、C（前端）并行开发的接口契约。P0 宠物资料的生日和备注字段已确定；宠物 CRUD、对话路由及 Qwen Provider 已实现，P0-8 会话历史已验收，地图演示版后端与页面已随 PR #40/#43 合并，P1-9 高德真实接入（POI 查询与详情）由本 PR 实现，`/locations/resolve` 地址解析待 P1-10。实现状态说明不改变以下既有接口契约；新增记录/提醒契约已由 A/C 确认（PR #33），记录后端已随 PR #34 合并，提醒后端已随 PR #38 合并（C 提醒页面已随 PR #39 合并）。其他约定仍需三人评审，接口变更先在 PR 中同步三人。P2-1 其他宠物具体物种的后端读写（含 Alembic 迁移与关联校验）由本 PR 实现；前端接入与三方联调在 B 完整后端合并后进行。
 
 ## 共同规则
 
@@ -45,9 +45,9 @@
 }
 ```
 
-`name` 为去除首尾空格后 1–50 字符；`species` 为 `dog`、`cat`、`other`。其余可选字段在响应中总是出现：`breed`、`notes` 为字符串或 `null`（最长分别 100、2000 字符），`birthday` 为 `YYYY-MM-DD` 日期或 `null`，不得晚于当天。创建时省略可选字段等同 `null`。时间戳为 UTC，并以 `Z` 结尾。
+`name` 为去除首尾空格后 1–50 字符；`species` 为 `dog`、`cat`、`other`。`other_species` 是 `species` 为 `other` 时的具体物种档案字段（如 `兔`）：仅接受字符串或 `null`，去除首尾空白后为空等同 `null`，标准化后最多 50 个 Unicode 码点（仅去首尾空白，不做 NFC 等归一化，不改写其余字符，不折叠内部空白）；`species` 为 `dog`/`cat` 时恒为 `null`。其余可选字段在响应中总是出现：`breed`、`notes` 为字符串或 `null`（最长分别 100、2000 字符），`birthday` 为 `YYYY-MM-DD` 日期或 `null`，不得晚于当天。创建时省略可选字段等同 `null`。时间戳为 UTC，并以 `Z` 结尾。
 
-P2-1 过渡：`Pet` 响应已包含 `other_species`（`null` 或具体物种字符串，`species` 为 `other` 时的补充说明）。写入路径尚未开放——创建或更新请求携带 `other_species` 按未知字段返回 `422`，当前值恒为 `null`。最终读写语义以 PR #63 中的契约草案为准，实施 PR 合并后本段移除。
+数据库通过一个 Alembic revision 新增可空列（`String(50)`，长度由应用层校验保证）；所有存量宠物（包括 `other`）的 `other_species` 回填 `null`，不从 `breed`、`notes` 或聊天文本推断具体物种。部署顺序为先部署后端及迁移，再启用前端新字段。
 
 ### P0 最终决定：生日和备注字段
 
@@ -82,13 +82,19 @@ P2-1 过渡：`Pet` 响应已包含 `other_species`（`null` 或具体物种字�
 }
 ```
 
+`species` 为 `other` 时可携带具体物种：
+
+```json
+{"name":"团团","species":"other","other_species":"兔"}
+```
+
 部分更新示例（清除备注，同时修改名称）：
 
 ```json
 {"name":"小豆","notes":null}
 ```
 
-PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes` 传 `null` 表示清空，`name` 和 `species` 不能为 `null`。空对象和未知字段返回 `422`。删除不存在的记录返回 `404`；若仍被会话引用则返回 `409 PET_IN_USE`，不自动删除会话（等会话生命周期实现后生效）。
+PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes`、`other_species` 传 `null` 表示清空（`other_species` 的 `null` 是合法清空操作），`name` 和 `species` 不能为 `null`。`other_species` 按合并原资料后的完整对象联合校验：`dog`/`cat` 携带非空具体物种返回 `422`；从 `other` 切回 `dog`/`cat` 时必须显式提交 `other_species: null`，仅隐藏输入框或省略字段不能清除旧值，否则返回 `422` 且原资料不变——两类 `422` 的 `message` 可区分，错误码仍为 `VALIDATION_ERROR`。空对象和未知字段返回 `422`。删除不存在的记录返回 `404`；若仍被会话引用则返回 `409 PET_IN_USE`，不自动删除会话（等会话生命周期实现后生效）。
 
 ## P0：对话
 

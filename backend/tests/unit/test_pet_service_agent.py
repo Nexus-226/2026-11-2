@@ -46,6 +46,7 @@ def test_bound_service_uses_session_and_maps_missing_pet_for_agent(
             assert found.data.id == UUID(created_pet.id)
             assert found.data.birthday is None
             assert found.data.notes == "约 3 岁"
+            assert found.data.other_species is None
 
             missing_pet_id = uuid4()
             assert service.get_pet(missing_pet_id) is None
@@ -60,9 +61,18 @@ def test_bound_service_uses_session_and_maps_missing_pet_for_agent(
             assert missing.status == "error"
             assert missing.error_code == "PET_NOT_FOUND"
 
+            # P2-1：具体物种经真实 Service → 工具序列化后仍带字段与值，
+            # 而非只检查类型定义。
+            rabbit = create_pet(
+                session,
+                PetCreate(name="团团", species="other", other_species="兔"),
+            )
             listed = runtime.run_tools([ToolCallRequest(name="list_pets", args={})])[0]
             assert listed.status == "success"
-            assert len(listed.data) == 1
+            assert len(listed.data) == 2
             assert isinstance(listed.data[0], PetRead)
+            pets_by_id = {str(pet.id): pet for pet in listed.data}
+            assert pets_by_id[rabbit.id].other_species == "兔"
+            assert pets_by_id[created_pet.id].other_species is None
     finally:
         engine.dispose()
