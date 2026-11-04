@@ -1,8 +1,6 @@
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-import pytest
-
 from app.agent.runtime import AgentRuntime
 from app.agent.schemas import ToolCallRequest
 from app.agent.tools import build_default_registry
@@ -95,13 +93,6 @@ def test_pet_tool_descriptions_mention_other_species() -> None:
     assert "other_species" in registry.get("list_pets").description
 
 
-requires_other_species = pytest.mark.skipif(
-    "other_species" not in PetRead.model_fields,
-    reason="待 B 在 PetRead 增加 other_species 字段后启用",
-)
-
-
-@requires_other_species
 def test_pet_tools_expose_other_species_for_other_pet() -> None:
     """P2-1：other 宠物的具体物种 other_species 经工具原样透传。"""
     pet = _pet(species="other", other_species="兔")
@@ -114,7 +105,6 @@ def test_pet_tools_expose_other_species_for_other_pet() -> None:
     assert result.data.model_dump(mode="json")["other_species"] == "兔"
 
 
-@requires_other_species
 def test_pet_tools_serialize_other_species_null_for_dog() -> None:
     """P2-1：dog/cat 的 other_species 恒为 null，序列化后仍为 null。"""
     pet = _pet(species="dog", other_species=None)
