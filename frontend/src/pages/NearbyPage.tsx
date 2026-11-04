@@ -283,27 +283,29 @@ export default function NearbyPage({
         {started && (
           <>
             <div className="nearby-toolbar">
-              <fieldset className="nearby-categories">
-                <legend>地点类别</legend>
-                {(Object.keys(categoryLabels) as NearbyCategory[]).map(
-                  (item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      aria-pressed={category === item}
-                      className={
-                        category === item
-                          ? "category-tab active"
-                          : "category-tab"
-                      }
-                      disabled={loading}
-                      onClick={() => changeCategory(item)}
-                    >
-                      {categoryLabels[item]}
-                    </button>
-                  ),
-                )}
-              </fieldset>
+              <div className="nearby-categories">
+                <span>地点类别</span>
+                <div className="category-tabs">
+                  {(Object.keys(categoryLabels) as NearbyCategory[]).map(
+                    (item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-pressed={category === item}
+                        className={
+                          category === item
+                            ? "category-tab active"
+                            : "category-tab"
+                        }
+                        disabled={loading}
+                        onClick={() => changeCategory(item)}
+                      >
+                        {categoryLabels[item]}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
               <label className="nearby-radius">
                 搜索半径
                 <select

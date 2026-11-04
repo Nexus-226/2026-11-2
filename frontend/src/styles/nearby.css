@@ -51,18 +51,16 @@
   align-items: end;
   margin: 24px 0;
 }
-.nearby-categories {
-  border: 0;
-  padding: 0;
-  display: flex;
-  gap: 8px;
-}
-.nearby-categories legend,
+.nearby-categories,
 .nearby-radius {
   display: grid;
   gap: 6px;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
+}
+.category-tabs {
+  display: flex;
+  gap: 8px;
 }
 .category-tab.active {
   background: #253d39;
