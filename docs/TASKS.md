@@ -266,6 +266,8 @@ P1-8 通过：HTTP 契约 12/12、真浏览器功能点 7/7（用户报告），
 
 P1-10 端点已在 [PR #48](https://github.com/Nexus-226/2026-11-2/pull/48) 实现：`POST /api/v1/locations/resolve`（高德 v3 `geocode/geo`，MockTransport 测试 17 项）返回候选并按契约处理 404/422/503/502/504；前端候选选择后以 `resolved_address` 查询附近，演示地点不提供导航入口，真实地点的导航链接由用户点击打开。此前 C 侧联调仅验证到预期 404 错误展示；真实高德地址解析、候选选择与导航需待 P1-9 合并后联调验收，P1-10 暂不标记完成。
 
+P1-10 候选来源契约升级（Issue #62 冻结稿，[PR #64](https://github.com/Nexus-226/2026-11-2/pull/64) 待评审）：`/locations/resolve` 改为串行双查高德 v5 `place/text`（地标 POI）+ v3 `geocode/geo`，新增可选 `city`（1–20 字符）与响应字段 `name/city/district/level/match_kind`（poi|geocode，字段恒存在、值可为 null）；候选按门址级 geocode → POI → 其余 geocode 排序、两路分别去重、上限 5 条，任一路失败/超时整体 502/504 不静默降级，两路均空才 404；POI `formatted_address` 由省市区+详细地址去重拼接，`poi_id` 不透出，首版不做 POI 类型过滤。新增 18 项测试（适配器 +8、Service/路由 +10）全量通过，`ruff check`/`ruff format --check` 通过；真实 Key 人工验证（人民广场/东方明珠/人民大道185号/万达广场/无城市跨城样例，覆盖有无 `city`）确认东方明珠省级 geocode 候选被 POI 挤出上限、门址级 geocode 排第一、坐标与既有参考值一致，结果已脱敏回贴 Issue #62，可复测样例见该评论与 PR #64。A 侧工具与 Agent 无改动；C 侧需按冻结稿同步城市输入、新字段展示与回归测试后，才作为新方案验收。
+
 ### P1-12 主执行验收（2026-11-04）
 
 基于 main `dced116`，真实高德页面/HTTP 与真实模型注册工具主链路已执行；后端 200 项、前端 51 项测试及构建通过。详细范围、真实/受控证据与未通过项见 [验收记录](P1-12_ACCEPTANCE.md)。未配置高德时模型给出无效恢复建议，另有地址展示、成功定位与外部导航目标页待确认；P1-12 保持待审核，不标记完成。
