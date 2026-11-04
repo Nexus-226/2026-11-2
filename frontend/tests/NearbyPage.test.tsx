@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -237,6 +238,109 @@ function addressMatch(
     data_source: "amap",
   };
 }
+
+function addressResponse(): NearbyResponse {
+  return demoResponse({
+    search_center: {
+      location: { lat: 39.96, lng: 116.31 },
+      source: "resolved_address",
+      label: "所选地址",
+    },
+    fallback_reason: "amap_not_configured",
+  });
+}
+
+async function selectAddress() {
+  mocks.resolveAddress.mockResolvedValue([
+    addressMatch("北京市海淀区幸福路 1 号", 39.96, 116.31),
+  ]);
+  fireEvent.change(screen.getByLabelText("地址"), {
+    target: { value: "幸福路 1 号" },
+  });
+  fireEvent.click(screen.getByText("解析地址"));
+  fireEvent.click(await screen.findByText("北京市海淀区幸福路 1 号"));
+}
+
+it("keeps the chosen address visible through fallback, filters and retry", async () => {
+  mocks.search.mockResolvedValue(addressResponse());
+  render(<NearbyPage onNavigate={() => {}} />);
+  await selectAddress();
+  const center = /查询中心：北京市海淀区幸福路 1 号/;
+  await screen.findByText(center);
+  fireEvent.click(screen.getByText("宠物美容"));
+  await screen.findByText(center);
+  expect(mocks.search).toHaveBeenLastCalledWith({
+    lat: 39.96,
+    lng: 116.31,
+    type: "pet_grooming",
+    radius_m: 3000,
+    center_source: "resolved_address",
+  });
+  fireEvent.change(screen.getByLabelText("搜索半径"), {
+    target: { value: "1000" },
+  });
+  await screen.findByText(center);
+  expect(mocks.search).toHaveBeenLastCalledWith(
+    expect.objectContaining({ radius_m: 1000 }),
+  );
+  mocks.search.mockRejectedValueOnce(new Error("暂时不可用"));
+  fireEvent.click(screen.getByText("重新查询"));
+  await screen.findByRole("alert");
+  expect(screen.queryByText(center)).toBeNull();
+  fireEvent.click(screen.getByText("重试"));
+  await screen.findByText(center);
+});
+
+it("replaces the address center when switching to demo and successful geolocation", async () => {
+  mocks.search.mockResolvedValueOnce(addressResponse());
+  render(<NearbyPage onNavigate={() => {}} />);
+  await selectAddress();
+  await screen.findByText(/查询中心：北京市海淀区幸福路 1 号/);
+  fireEvent.click(screen.getByText("使用演示区域"));
+  await screen.findByText(/查询中心：演示区域中心/);
+  expect(screen.queryByText(/查询中心：北京市海淀区/)).toBeNull();
+  geo.getCurrentPosition.mockImplementation((success) =>
+    success({ coords: { latitude: 31.2304, longitude: 121.4737 } }),
+  );
+  mocks.search.mockResolvedValue(
+    demoResponse({
+      source: "amap",
+      places: [],
+      search_center: {
+        source: "user_location",
+        label: "当前位置",
+        location: { lat: 31.2304, lng: 121.4737 },
+      },
+    }),
+  );
+  fireEvent.click(screen.getByText("使用我的位置"));
+  await screen.findByText(/查询中心：当前位置（纬度 31.2304，经度 121.4737）/);
+  expect(screen.queryByText(/查询中心：北京市海淀区/)).toBeNull();
+  expect(mocks.search).toHaveBeenLastCalledWith({
+    lat: 31.2304,
+    lng: 121.4737,
+    type: "pet_hospital",
+    radius_m: 3000,
+    center_source: "user_location",
+  });
+});
+
+it("does not restore a late address result after switching to demo", async () => {
+  let finish!: (response: NearbyResponse) => void;
+  mocks.search.mockReturnValue(
+    new Promise<NearbyResponse>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  render(<NearbyPage onNavigate={() => {}} />);
+  await selectAddress();
+  fireEvent.click(screen.getByText("使用演示区域"));
+  await screen.findByText(/查询中心：演示区域中心/);
+  await act(async () => finish(addressResponse()));
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.getByText(/查询中心：演示区域中心/)).toBeTruthy();
+  expect(screen.queryByText(/查询中心：北京市海淀区/)).toBeNull();
+});
 
 it("resolves typed address and queries nearby after user picks a candidate", async () => {
   mocks.resolveAddress.mockResolvedValue([

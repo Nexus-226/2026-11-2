@@ -106,6 +106,7 @@ export default function NearbyPage({
   const [category, setCategory] = useState<NearbyCategory>("pet_hospital");
   const [radius, setRadius] = useState(3000);
   const [result, setResult] = useState<NearbyResponse | null>(null);
+  const [resolvedAddressLabel, setResolvedAddressLabel] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [started, setStarted] = useState(false);
@@ -113,7 +114,7 @@ export default function NearbyPage({
   const modeRef = useRef<LoadMode | null>(null);
   const requestIdRef = useRef(0);
   const centerRef = useRef<{ lat: number; lng: number } | null>(null);
-  const resolvedCenterRef = useRef<{ lat: number; lng: number } | null>(null);
+  const resolvedCenterRef = useRef<AddressMatch | null>(null);
   useEffect(
     () => () => {
       requestIdRef.current += 1;
@@ -128,6 +129,7 @@ export default function NearbyPage({
     setLoading(true);
     setError("");
     setResult(null);
+    setResolvedAddressLabel("");
     setSelectedId(null);
     try {
       let data: NearbyResponse;
@@ -156,7 +158,7 @@ export default function NearbyPage({
   }
 
   async function loadAddress(
-    center: { lat: number; lng: number },
+    match: AddressMatch,
     type: NearbyCategory,
     radiusM: number,
   ) {
@@ -166,17 +168,19 @@ export default function NearbyPage({
     setLoading(true);
     setError("");
     setResult(null);
+    setResolvedAddressLabel("");
     setSelectedId(null);
     try {
       const data = await nearbyClient.search({
-        lat: center.lat,
-        lng: center.lng,
+        lat: match.location.lat,
+        lng: match.location.lng,
         type,
         radius_m: radiusM,
         center_source: "resolved_address",
       });
       if (requestIdRef.current !== requestId) return;
       setResult(data);
+      setResolvedAddressLabel(match.formatted_address);
     } catch (e) {
       if (requestIdRef.current !== requestId) return;
       setError(msg(e));
@@ -280,8 +284,8 @@ export default function NearbyPage({
         <AddressSearch
           disabled={loading}
           onSelect={(match) => {
-            resolvedCenterRef.current = match.location;
-            void loadAddress(match.location, category, radius);
+            resolvedCenterRef.current = match;
+            void loadAddress(match, category, radius);
           }}
         />
         {started && (
@@ -332,10 +336,12 @@ export default function NearbyPage({
                 <p className="nearby-source">{sourceBanner(result)}</p>
                 <p className="nearby-center">
                   查询中心：
-                  {result.search_center.label}
-                  （纬度 {result.search_center.location.lat.toFixed(
-                    4,
-                  )}，经度 {result.search_center.location.lng.toFixed(4)}）
+                  {result.search_center.source === "resolved_address" &&
+                  resolvedAddressLabel
+                    ? resolvedAddressLabel
+                    : result.search_center.label}
+                  （纬度 {result.search_center.location.lat.toFixed(4)}，经度{" "}
+                  {result.search_center.location.lng.toFixed(4)}）
                 </p>
                 {result.places.length === 0 ? (
                   <p className="nearby-empty">
