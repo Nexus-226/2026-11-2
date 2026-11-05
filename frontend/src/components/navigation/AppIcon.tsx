@@ -6,6 +6,7 @@ export type IconName =
   | "pets"
   | "nearby"
   | "lost"
+  | "vlogs"
   | "chevron"
   | "vaccine"
   | "deworming"
@@ -26,6 +27,8 @@ export default function AppIcon({ name }: { name: IconName }) {
     nearby:
       "M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
     lost: "M11 21H4V3h13v7M7 7h7M7 11h3M21 16a5 5 0 1 1-10 0 5 5 0 0 1 10 0ZM20 20l3 3",
+    vlogs:
+      "M4 8h4l2-3h4l2 3h4v12H4V8ZM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
     chevron: "m6 9 6 6 6-6",
   };
   return (
