@@ -256,7 +256,7 @@ def test_run_chat_prompt_falls_back_to_id_when_pet_missing() -> None:
     assert "当前关联宠物 pet_id=" in prompt
 
 
-def test_run_chat_prompt_quotes_notes_verbatim() -> None:
+def test_run_chat_prompt_notes_default_brief() -> None:
     captured: dict[str, str] = {}
 
     class CapturingProvider:
@@ -271,10 +271,10 @@ def test_run_chat_prompt_quotes_notes_verbatim() -> None:
         provider=CapturingProvider(),
     )
     prompt = captured["system_prompt"]
-    assert "照原文引用" in prompt
+    assert "引用或准确概括" in prompt
     assert "内部字段名" in prompt
-    assert "不要换算日期格式" in prompt
-    assert "也不要补充" in prompt
+    assert "明确要求解释日期" in prompt
+    assert "不得把推断说成已保存的档案事实" in prompt
 
 
 def test_run_chat_prompt_does_not_leak_internal_names() -> None:
