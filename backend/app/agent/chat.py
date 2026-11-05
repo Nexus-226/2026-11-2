@@ -146,6 +146,17 @@ def run_chat(
                 "档案里没有该名字：先调用 list_pets 核对是否有这只宠物，"
                 "列表里确实没有时再如实说明没有。需要档案详情时调用 get_pet_profile 查询。"
             )
+            same_name_pets = [
+                p for p in service.list_pets() if p.name == associated_pet.name
+            ]
+            if len(same_name_pets) > 1:
+                system += (
+                    f" 注意：档案里目前有 {len(same_name_pets)} 只名字都为"
+                    f"「{associated_pet.name}」的宠物。用户只提这个名字、且没有用"
+                    "“它/这只宠物/当前宠物”明确指向当前关联的这只时，不能默认就是它："
+                    "先调用 list_pets 列出这些同名宠物（按 species 区分），"
+                    "请用户确认是哪一只后再回答或生成记录草稿；确认前不要生成草稿。"
+                )
         else:
             system += f" 当前关联宠物 pet_id={pet_id}。"
     else:

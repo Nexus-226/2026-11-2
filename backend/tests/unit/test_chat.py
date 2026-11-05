@@ -183,6 +183,47 @@ def test_run_chat_prompt_names_associated_pet() -> None:
     assert str(PET_ID) in prompt
 
 
+def test_run_chat_prompt_warns_on_same_name_pets() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    other_pet = _pet().model_copy(update={"id": uuid4(), "species": "cat"})
+    run_chat(
+        "豆豆昨天洗澡了吗？",
+        PET_ID,
+        FakePetService([_pet(), other_pet]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "档案里目前有 2 只名字都为「豆豆」的宠物" in prompt
+    assert "请用户确认是哪一只" in prompt
+    assert "确认前不要生成草稿" in prompt
+
+
+def test_run_chat_prompt_no_same_name_warning_when_names_unique() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    other_pet = _pet().model_copy(update={"id": uuid4(), "name": "小白"})
+    run_chat(
+        "豆豆昨天洗澡了吗？",
+        PET_ID,
+        FakePetService([_pet(), other_pet]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "档案里目前有" not in prompt
+    assert "同名宠物" not in prompt
+
+
 def test_run_chat_prompt_warns_not_to_equate_other_names() -> None:
     captured: dict[str, str] = {}
 
