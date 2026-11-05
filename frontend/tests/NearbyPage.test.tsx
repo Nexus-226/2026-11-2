@@ -15,10 +15,15 @@ const mocks = vi.hoisted(() => ({
   search: vi.fn(),
   searchDemoRegion: vi.fn(),
   resolveAddress: vi.fn(),
+  loadMap: vi.fn(),
 }));
 vi.mock("../src/api/nearby", () => ({
   nearbyClient: mocks,
   resolveAddress: mocks.resolveAddress,
+}));
+
+vi.mock("@amap/amap-jsapi-loader", () => ({
+  default: { load: mocks.loadMap },
 }));
 
 const geo = {
@@ -104,7 +109,10 @@ beforeEach(() => {
     configurable: true,
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 it("labels fallback empty results without claiming real nearby services are absent", async () => {
   mocks.searchDemoRegion.mockResolvedValue(
@@ -613,4 +621,62 @@ it("does not mark demo places as inferred and shows no business hours", async ()
   // 因此不显示营业时间，也不标注「按营业时间推算」。
   expect(screen.queryByText(/今日营业时间/)).toBeNull();
   expect(screen.queryByText(/按营业时间推算/)).toBeNull();
+});
+
+it("links list selection and map markers, then destroys the map on exit", async () => {
+  vi.stubEnv("VITE_AMAP_JS_KEY", "test-key");
+  const setCenter = vi.fn();
+  const destroy = vi.fn();
+  const add = vi.fn();
+  const markerClicks: Array<() => void> = [];
+  mocks.loadMap.mockResolvedValue({
+    Map: class {
+      on(_event: string, complete: () => void) {
+        complete();
+      }
+      setCenter = setCenter;
+      destroy = destroy;
+      add = add;
+      setFitView = vi.fn();
+    },
+    Marker: class {
+      constructor(
+        public options: { position: [number, number]; content: HTMLElement },
+      ) {}
+      on(_event: string, click: () => void) {
+        markerClicks.push(click);
+      }
+    },
+  });
+
+  const { unmount } = render(<NearbyPage onNavigate={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "使用演示区域" }));
+  await waitFor(() => expect(add).toHaveBeenCalledOnce());
+
+  const first = screen.getByRole("button", { name: /1. 演示动物医院/ });
+  const second = screen.getByRole("button", { name: /2. 演示宠物诊所/ });
+  const [, firstMarker, secondMarker] = add.mock.calls[0][0];
+  fireEvent.click(first);
+  expect(first.getAttribute("aria-pressed")).toBe("true");
+  expect(firstMarker.options.content.classList.contains("active")).toBe(true);
+  expect(setCenter).toHaveBeenLastCalledWith(firstMarker.options.position);
+  expect(firstMarker.options.position).not.toEqual([116.4021, 39.9041]);
+
+  act(() => markerClicks[1]());
+  expect(first.getAttribute("aria-pressed")).toBe("false");
+  expect(second.getAttribute("aria-pressed")).toBe("true");
+  expect(setCenter).toHaveBeenLastCalledWith(secondMarker.options.position);
+  unmount();
+  expect(destroy).toHaveBeenCalledOnce();
+});
+
+it("keeps the place list usable when the SDK rejects", async () => {
+  vi.stubEnv("VITE_AMAP_JS_KEY", "test-key");
+  mocks.loadMap.mockRejectedValue(new Error("offline"));
+  render(<NearbyPage onNavigate={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "使用演示区域" }));
+  expect(
+    await screen.findByText("地图暂时无法加载，仍可查看地点列表。"),
+  ).toBeTruthy();
+  expect(screen.getByRole("region", { name: "地点列表" })).toBeTruthy();
 });

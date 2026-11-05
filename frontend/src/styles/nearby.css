@@ -191,3 +191,33 @@
     padding: 0 16px 32px;
   }
 }
+
+.nearby-map {
+  width: 100%;
+  height: clamp(260px, 45vh, 420px);
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.nearby-map-pin {
+  display: block;
+  padding: 4px 8px;
+  border: 2px solid white;
+  border-radius: 18px;
+  background: #21436f;
+  color: white;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nearby-map-pin.active {
+  background: #aa3a24;
+}
+
+.place-card.place-card-selected {
+  border-color: #aa3a24;
+}
+
+.place-map-select {
+  text-align: left;
+}
