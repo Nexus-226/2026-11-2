@@ -187,3 +187,15 @@ def test_nearby_tool_description_limits_demo_fallback_and_navigation() -> None:
     assert "不得据此判断真实附近有没有服务" in description
     assert "不要建议用户重新定位" in description
     assert "启用导航" in description
+
+
+def test_nearby_tool_description_explains_derived_business_status() -> None:
+    registry = build_default_registry(
+        FakePetService(), nearby_service=FakeNearbyService()
+    )
+    description = registry.get("search_nearby_pet_services").description
+    assert "business_hours_today" in description
+    assert "按今日营业时间推算" in description
+    assert "不是实时开关门探测" in description
+    assert "演示固定值" in description
+    assert "不要给出开关门结论" in description
