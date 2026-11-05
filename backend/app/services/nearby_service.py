@@ -7,15 +7,21 @@ WGS84，按服务端球面距离过滤半径，以 `(distance_m, id)` 稳定排�
 分别以 `fallback_reason` 的 `amap_not_configured`/`amap_unavailable`
 标注，回落时沿用请求中的查询中心与来源。`/api/v1/nearby/demo` 仍使用
 配置的演示中心。`/api/v1/locations/resolve` 按契约串行双查 v5
-`place/text` 与 v3 `geocode/geo` 合并候选，不做演示回退。所有演示
-地点均为虚构数据，`data_source` 与 ID 保持 `demo` 前缀，页面与 Agent
-必须明确标注演示来源，不得描述为实时结果。
+`place/text` 与 v3 `geocode/geo` 合并候选，不做演示回退。P1-9 追加
+（Issue #82）：`amap:` 地点按北京时间从高德 `business.opentime_today`
+去除首尾空白后的原文推算 `business_status`，该原文经
+`business_hours_today` 透出；缺失或无法解析时状态保留 `unknown`。所有演示地点均为虚构数据，
+`data_source` 与 ID 保持 `demo` 前缀，页面与 Agent 必须明确标注
+演示来源，不得描述为实时结果。
 """
 
 import logging
 import math
 import os
+import re
 from dataclasses import dataclass
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 
@@ -237,6 +243,7 @@ def _seed_location(seed: DemoPlaceSeed, demo_center: GeoLocation) -> GeoLocation
 def _to_place(
     seed: DemoPlaceSeed, location: GeoLocation, query_center: GeoLocation
 ) -> Place:
+    # 演示种子没有营业时间数据；business_status 为固定值，不是推算结果。
     return Place(
         id=f"demo:{seed.key}",
         name=seed.name,
@@ -246,6 +253,7 @@ def _to_place(
         location=location,
         distance_m=spherical_distance_m(query_center, location),
         business_status=seed.business_status,
+        business_hours_today=None,
         navigation_url=None,
         data_source="demo",
     )
@@ -278,11 +286,110 @@ def _amap_client() -> AMapClient:
     return AMapClient(api_key=_amap_api_key())
 
 
+BEIJING_TZ = ZoneInfo("Asia/Shanghai")
+
+# 高德以「24小时营业」表示全天营业（2026-11-05 真实抽查 75 个宠物 POI
+# 中 9 例）；该固定文本以外的说明文字不参与推算。
+ALWAYS_OPEN_TEXT = "24小时营业"
+
+
+def _now_beijing() -> datetime:
+    """当前北京时间；营业状态推算与测试注入时钟的唯一入口。"""
+    return datetime.now(BEIJING_TZ)
+
+
+def _parse_today_open_ranges(text: str) -> list[tuple[int, int]] | None:
+    """把 opentime_today 原文解析为今日营业区间（分钟，含起点不含终点）。
+
+    支持逗号/顿号/分号/斜杠/空白分隔的多时段（取并集）；结束时间小于
+    开始时间视为跨午夜（结束在次日）；结束 24:00 表示营业到当日午夜，
+    24:MM（MM 不为 00）无有效时刻含义，视为无法解析。
+    任一分段无法解析（如附加说明文字）时整体返回 None，调用方按
+    unknown 处理，不做部分猜测。
+    """
+    normalized = (
+        text.replace("：", ":")
+        .replace("，", ",")
+        .replace("、", ",")
+        .replace("；", ";")
+        .replace("－", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+    )
+    ranges: list[tuple[int, int]] = []
+    for segment in re.split(r"[,;/\s]+", normalized):
+        if not segment:
+            continue
+        match = re.fullmatch(r"(\d{1,2}):([0-5]\d)-(\d{1,2}):([0-5]\d)", segment)
+        if match is None:
+            return None
+        start_hour, start_minute, end_hour, end_minute = (
+            int(part) for part in match.groups()
+        )
+        # 开始时间不允许 24 点；结束 24:00 视为当日 24 点（1440 分），
+        # 结束 24:MM（MM 不为 00）视为无法解析，不把 24:30 当作 1470 分。
+        if start_hour > 23 or end_hour > 24 or (end_hour == 24 and end_minute != 0):
+            return None
+        start = start_hour * 60 + start_minute
+        end = end_hour * 60 + end_minute
+        if start == end:
+            return None
+        ranges.append((start, end))
+    if not ranges:
+        return None
+    return ranges
+
+
+def _derive_business_status(
+    opentime_today: str | None, now: datetime | None = None
+) -> BusinessStatus:
+    """按北京时间从高德 opentime_today 原文推算营业状态（Issue #82）。
+
+    缺失/空白、无法解析（含「24小时营业」以外的说明文字）→ unknown；
+    「24小时营业」→ open；一个或多个 HH:MM-HH:MM 区间按北京时间取
+    并集判定 open/closed。跨午夜区间（如 10:00-03:00）只把「今日
+    开始时间之后」计为营业；若此刻尚未到某跨午夜场次的次日结束点
+    （昨日场次可能仍在营业，且今日场次未开始或已结束），仅凭当日
+    数据无法判断，保守返回 unknown，避免误判打烊。
+    `now` 为 None 时取当前北京时间；测试可注入固定时刻。
+    """
+    text = (opentime_today or "").strip()
+    if now is None:
+        now = _now_beijing()
+    if not text:
+        return "unknown"
+    if text == ALWAYS_OPEN_TEXT:
+        return "open"
+    ranges = _parse_today_open_ranges(text)
+    if ranges is None:
+        return "unknown"
+    minutes_now = now.hour * 60 + now.minute
+    normal = [(start, end) for start, end in ranges if end > start]
+    cross_midnight = [(start, end) for start, end in ranges if end < start]
+    if any(start <= minutes_now < end for start, end in normal):
+        return "open"
+    if any(start <= minutes_now for start, _ in cross_midnight):
+        return "open"
+    if cross_midnight and minutes_now < max(end for _, end in cross_midnight):
+        # 此时刻早于某个跨午夜场次的次日结束点：昨日场次可能仍在营业，
+        # 而今日场次尚未开始或已结束（前两步未命中），仅凭当日数据无法
+        # 可靠判定。跨午夜区间 end < start，now < end 已蕴含 now < start，
+        # 无需再与今日普通区间的最早开始时间绑定（评审修订，Issue #82）。
+        return "unknown"
+    return "closed"
+
+
 def _amap_to_place(
     poi: AMapPlace, category: NearbyCategory, query_center: GeoLocation
 ) -> Place:
+    """高德 POI → 对外 Place。
+
+    `business_hours_today` 透出去除首尾空白后的高德 `opentime_today`
+    （未解析也透出供前端展示）；`business_status` 按该文本按北京时间推算，
+    缺失或无法解析时为 unknown；高德不提供可靠导航链接，
+    `navigation_url` 为 None。
+    """
     location = GeoLocation(lat=poi.lat, lng=poi.lng)
-    # 高德不提供可靠的营业状态与导航链接，按契约分别置为 unknown/None。
     return Place(
         id=f"amap:{poi.poi_id}",
         name=poi.name,
@@ -291,7 +398,8 @@ def _amap_to_place(
         phone=poi.phone,
         location=location,
         distance_m=spherical_distance_m(query_center, location),
-        business_status="unknown",
+        business_status=_derive_business_status(poi.opentime_today),
+        business_hours_today=poi.opentime_today,
         navigation_url=None,
         data_source="amap",
     )

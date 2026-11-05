@@ -271,6 +271,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
     "location":{"lat":39.9001,"lng":116.4001},
     "distance_m":860,
     "business_status":"unknown",
+    "business_hours_today":null,
     "navigation_url":null,
     "data_source":"amap"
   }],
@@ -284,7 +285,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 }
 ```
 
-`phone`、`navigation_url` 可为 `null`；`business_status` 为 `open`、`closed`、`unknown`，不可确定时用 `unknown`。有导航链接时必须由用户主动打开。空电话显示“暂无电话”。`distance_m` 为非负整数，单位米。
+`phone`、`navigation_url`、`business_hours_today` 可为 `null`；`business_status` 为 `open`、`closed`、`unknown`，不可确定时用 `unknown`。`business_hours_today` 为数据源返回的今日营业时间去除首尾空白后的原文（高德可能是 `09:00-21:00`、`24小时营业` 等文本），缺失为 `null`，仅作展示，解析由后端完成。`business_status` 语义：`demo` 地点为演示固定值、不代表真实营业；`amap` 地点由后端按北京时间从 `business_hours_today` 推算——解析成功时为 `open`/`closed`（多时段取并集；跨午夜区间如 `10:00-03:00` 的晚间段计为营业，次日结束点之前的凌晨尾段在昨日场次可能仍在营业时保守 `unknown`，避免误判打烊），缺失或无法解析时为 `unknown`。前端仅在 `business_hours_today` 非 `null` 且 `business_status` 非 `unknown` 时把状态标注为「按营业时间推算」；`business_hours_today` 非 `null` 而 `business_status` 为 `unknown` 时可展示原文，但不得给出开关门结论。有导航链接时必须由用户主动打开。空电话显示“暂无电话”。`distance_m` 为非负整数，单位米。
 
 数据来源和 ID 约定：真实高德数据使用 `data_source: "amap"`、`id: "amap:<高德地点 ID>"`；种子演示数据使用 `data_source: "demo"`、`id: "demo:<稳定的演示地点 ID>"`。前端和 Agent 必须明确标注演示数据，不能称为实时结果。高德不可用时如果回落演示数据，也必须标注来源；不能提供真实导航时 `navigation_url` 为 `null`。
 
@@ -292,7 +293,7 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 
 `GET /api/v1/places/{place_id}?lat=39.9001&lng=116.4001` 返回 `200 Place`；详情中的 `distance_m` 依赖查询中心，因此必须附带 `lat`、`lng`，规则同上。按 ID 来源只查询对应数据源：`amap:<id>` 只查高德，`demo:<id>` 只查演示目录。对象不存在返回 `404 PLACE_NOT_FOUND`；高德未配置或查询失败时对 `amap:<id>` 返回可识别的 `503 SERVICE_UNAVAILABLE`、`502 UPSTREAM_ERROR` 或 `504 UPSTREAM_TIMEOUT`，绝不静默替换成演示地点；演示地点也不回退为高德结果。地图与列表使用同一 `NearbyResponse.places` 结果集；地图渲染失败需保留列表或给出可理解错误。
 
-实现状态（P1-9）：配置 `AMAP_WEB_SERVICE_KEY` 后 `/nearby` 走高德 v5 `place/around`（按类别关键字召回、WGS84↔GCJ-02 转换、服务端距离过滤、`(distance_m, id)` 稳定排序、按高德地点 ID 去重），未配置/失败按上述语义回落演示数据；`amap:` 详情走 v5 `place/detail`（503/502/504/404 语义如上）；高德无可靠营业状态时 `business_status` 固定 `unknown`，`navigation_url` 保持 `null`。测试均使用模拟响应，不消耗真实配额。
+实现状态（P1-9）：配置 `AMAP_WEB_SERVICE_KEY` 后 `/nearby` 走高德 v5 `place/around`（按类别关键字召回、WGS84↔GCJ-02 转换、服务端距离过滤、`(distance_m, id)` 稳定排序、按高德地点 ID 去重），未配置/失败按上述语义回落演示数据；`amap:` 详情走 v5 `place/detail`（503/502/504/404 语义如上）。高德 `business.opentime_today` 去除首尾空白后透出为 `business_hours_today`，`business_status` 按北京时间推算（多时段/跨午夜/`24小时营业` 均覆盖，跨午夜凌晨尾段保守 `unknown`），缺失或无法解析时保留 `unknown`，`navigation_url` 保持 `null`。`business_hours_today` 为新增字段、结构兼容：旧前端忽略新字段仅作过渡兼容，C 同步「今日营业时间」展示与「按营业时间推算」标注后才作为新行为验收。2026-11-05 已按 Issue #82 用真实 Key 抽查 75 个宠物 POI（记录见 TASKS.md 进展与 PR 描述）；测试均使用模拟响应，不消耗真实配额。
 
 实现状态（P1-10）：`POST /api/v1/locations/resolve` 已按上述契约实现（Issue #62 冻结稿）：串行双查高德 v5 `place/text`（适配器收敛为 `AMapLandmarkCandidate`）与 v3 `geocode/geo`（含 `level/city/district` 解析），候选按门址级 geocode → POI → 其余 geocode 排序、两路分别去重、上限 5 条；任一路失败/超时整体 502/504，无匹配 404、未配置 503，无演示回退。前端把用户所选候选作为 `/nearby` 查询中心并以 `center_source=resolved_address` 查询（同时覆盖 POI 与 geocode 选点）；导航链接由前端把 WGS84 转为 GCJ-02 后生成，仅对 `data_source: "amap"` 地点提供且由用户主动打开。新增字段保持结构兼容，但双查改变了候选内容与顺序：旧前端忽略新字段仅作过渡兼容，C 同步展示字段、城市输入与回归测试后才作为新方案验收。测试均使用模拟响应，不消耗真实配额；实施 PR 内以真实 Key 人工验证一次（人民广场/东方明珠/人民大道185号/万达广场/无城市跨城样例，覆盖有无 `city` 两种），结果脱敏回贴 Issue #62。
 

@@ -41,7 +41,11 @@ class AMapTimeout(AMapError):
 
 @dataclass(frozen=True)
 class AMapPlace:
-    """内部 POI 数据；lat/lng 已转换为 WGS84。"""
+    """内部 POI 数据；lat/lng 已转换为 WGS84。
+
+    `opentime_today` 为高德 `business.opentime_today` 原文（缺失为
+    None），仅透传不解析；营业状态推算在 Service 层完成。
+    """
 
     poi_id: str
     name: str
@@ -50,6 +54,7 @@ class AMapPlace:
     lat: float
     lng: float
     type_name: str
+    opentime_today: str | None = None
 
 
 @dataclass(frozen=True)
@@ -345,7 +350,12 @@ def _parse_poi(poi: object) -> AMapPlace | None:
         return None
     lat, lng = gcj02_to_wgs84(gcj_lat, gcj_lng)
     business = poi.get("business")
-    tel = business.get("tel") if isinstance(business, dict) else None
+    tel = None
+    opentime_today = None
+    if isinstance(business, dict):
+        tel = business.get("tel")
+        # 原文收敛（含「24小时营业」等文本）；解析与推算在 Service 层。
+        opentime_today = business.get("opentime_today")
     return AMapPlace(
         poi_id=poi_id.strip(),
         name=name.strip(),
@@ -354,6 +364,7 @@ def _parse_poi(poi: object) -> AMapPlace | None:
         lat=lat,
         lng=lng,
         type_name=_clean_text(poi.get("type")) or "",
+        opentime_today=_clean_text(opentime_today),
     )
 
 

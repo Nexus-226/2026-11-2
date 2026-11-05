@@ -153,7 +153,7 @@ npm run format -- src/app/App.tsx
 
 ## P1-9：高德真实接入（B 侧实现）
 
-配置 `AMAP_WEB_SERVICE_KEY`（高德 Web 服务 Key）后，`/api/v1/nearby` 通过高德 POI 2.0（v5 `place/around`）查询真实地点：按类别使用关键字召回（宠物医院/动物医院、宠物美容/SPA/洗护、宠物用品/宠物店），请求前把 WGS84 转为 GCJ-02，返回坐标转回 WGS84；坐标转换收敛在后端 `app/services/amap.py`，不透出高德原始响应或未转换坐标。距离仍由服务端按 WGS84 球面距离计算并过滤半径，结果按 `(distance_m, id)` 稳定排序并按高德地点 ID 去重；`category` 由高德类型文本映射，`business_status` 固定 `unknown`（高德无可靠营业状态），`phone` 取自高德 `business.tel`，`navigation_url` 保持 `null`。高德正常返回空列表时 `source: "amap"`、`places: []`，不算失败。
+配置 `AMAP_WEB_SERVICE_KEY`（高德 Web 服务 Key）后，`/api/v1/nearby` 通过高德 POI 2.0（v5 `place/around`）查询真实地点：按类别使用关键字召回（宠物医院/动物医院、宠物美容/SPA/洗护、宠物用品/宠物店），请求前把 WGS84 转为 GCJ-02，返回坐标转回 WGS84；坐标转换收敛在后端 `app/services/amap.py`，不透出高德原始响应或未转换坐标。距离仍由服务端按 WGS84 球面距离计算并过滤半径，结果按 `(distance_m, id)` 稳定排序并按高德地点 ID 去重；`category` 由高德类型文本映射，`business_hours_today` 透出去除首尾空白后的高德 `business.opentime_today` 原文，`business_status` 由后端按北京时间从该文本推算（多时段取并集；跨午夜时段的晚间段计为营业，次日结束点之前的凌晨尾段在昨日场次可能仍在营业时保守 `unknown`，缺失或无法解析保留 `unknown`），`phone` 取自高德 `business.tel`，`navigation_url` 保持 `null`。高德正常返回空列表时 `source: "amap"`、`places: []`，不算失败。
 
 高德未配置或调用失败时按 P1-7 契约回落演示种子数据并标注来源：未配置为 `fallback_reason: "amap_not_configured"`，超时/失败为 `fallback_reason: "amap_unavailable"`；回落沿用原查询中心与 `search_center`，不切换演示中心。`GET /api/v1/places/amap:<id>` 走 v5 `place/detail`：未配置 503、上游失败 502、超时 504、不存在 404，绝不静默替换为演示数据。密钥仅由后端读取，不写入日志或错误响应。相关测试（25 项）全部使用 httpx MockTransport 模拟高德响应，不依赖真实 Key 或配额；坐标转换以 eviltransform 公开测试向量校验。
 
