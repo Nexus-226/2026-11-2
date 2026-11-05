@@ -1,0 +1,17 @@
+[Unit]
+Description=Pet Agent API
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/pet-agent
+# 不填 LLM_API_KEY 时，聊天走 MockProvider（演示回复），宠物/记录等接口不受影响
+Environment=LLM_API_KEY=
+Environment=LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+Environment=LLM_MODEL=qwen-plus
+Environment=PET_AGENT_DATABASE_URL=sqlite:////var/lib/pet-agent/pet_agent.db
+ExecStart=/opt/pet-agent/.venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
