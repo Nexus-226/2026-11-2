@@ -30,6 +30,19 @@ const businessLabels: Record<Place["business_status"], string> = {
   unknown: "营业状态未知",
 };
 
+// P1-9（Issue #82）：营业状态只有高德「按营业时间推算」出来时才标注来源；
+// 原文存在但状态 unknown（无法解析）时只展示原文，不下开关门结论。
+// demo 地点没有营业时间数据，business_hours_today 恒为 null，不标注。
+// 额外限定 data_source 为 amap，避免未来演示/异常数据被误标为「推算」。
+function isInferredBusinessStatus(place: Place): boolean {
+  return (
+    place.data_source === "amap" &&
+    place.business_hours_today !== null &&
+    place.business_hours_today !== "" &&
+    place.business_status !== "unknown"
+  );
+}
+
 const msg = (e: unknown) =>
   e instanceof Error ? e.message : "操作失败，请重试。";
 
@@ -529,9 +542,15 @@ function PlaceList({ places }: { places: Place[] }) {
             </div>
             <span className="place-meta">
               {categoryLabels[place.category]} ·{" "}
-              {businessLabels[place.business_status]} ·{" "}
-              {place.data_source === "demo" ? "演示数据" : "实时数据"}
+              {businessLabels[place.business_status]}
+              {isInferredBusinessStatus(place)
+                ? "（按营业时间推算）"
+                : ""} · {place.data_source === "demo" ? "演示数据" : "实时数据"}
             </span>
+            {place.business_hours_today !== null &&
+              place.business_hours_today !== "" && (
+                <span>今日营业时间：{place.business_hours_today}</span>
+              )}
             <span>{place.address}</span>
             <span>{place.phone ?? "暂无电话"}</span>
             {place.data_source === "amap" && (

@@ -110,3 +110,73 @@ it("only requests the explicit demo endpoint and rejects malformed results", asy
     "/api/v1/nearby/demo?type=pet_grooming&radius_m=1000",
   );
 });
+
+function validPlace(overrides?: Record<string, unknown>) {
+  return {
+    id: "amap:B0REAL1",
+    name: "安心宠物医院",
+    category: "pet_hospital",
+    address: "示例路 18 号",
+    phone: null,
+    location: { lat: 39.913345, lng: 116.384047 },
+    distance_m: 900,
+    business_status: "open",
+    business_hours_today: "09:00-21:00",
+    navigation_url: null,
+    data_source: "amap",
+    ...overrides,
+  };
+}
+
+function validResponse(places: unknown[]) {
+  return {
+    places,
+    search_center: {
+      location: { lat: 39.9, lng: 116.4 },
+      source: "user_location",
+      label: "当前位置",
+    },
+    source: "amap",
+    fallback_reason: null,
+  };
+}
+
+it("accepts business_hours_today as string or null and rejects other values", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => validResponse([validPlace()]),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        validResponse([validPlace({ business_hours_today: null })]),
+    });
+  vi.stubGlobal("fetch", fetcher);
+  const query = {
+    lat: 39.9,
+    lng: 116.4,
+    type: "pet_hospital" as const,
+    radius_m: 3000,
+    center_source: "user_location" as const,
+  };
+  expect(
+    (await nearbyClient.search(query)).places[0].business_hours_today,
+  ).toBe("09:00-21:00");
+  expect(
+    (await nearbyClient.search(query)).places[0].business_hours_today,
+  ).toBe(null);
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () =>
+        validResponse([validPlace({ business_hours_today: 42 })]),
+    }),
+  );
+  await expect(nearbyClient.search(query)).rejects.toThrow(
+    "附近服务返回格式错误",
+  );
+});

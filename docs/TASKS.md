@@ -58,7 +58,7 @@ P1-1 记录/提醒契约已获 A/C 确认（见 PR #33）；P1-2 后端记录 CR
 | P1-6 | 记录—提醒—Agent 端到端验收 | A、B、C | 三人共同验收 | P1-3、P1-4、P1-5、P0-7 | 待审核（C 侧验收记录见 [P1-6-acceptance.md](P1-6-acceptance.md)，[PR #55](https://github.com/Nexus-226/2026-11-2/pull/55)） | 完成下方演示场景；覆盖多宠物隔离、空数据、改删记录、取消/完成提醒及重启持久化；相关测试与前端构建通过 |
 | P1-7 | 确认地点结构、坐标、附近查询及地址解析契约 | B，A/C 协作 | A、C | P0-0 | 进行中（契约提案已合并 PR #35，待 A/C 确认） | 三人确认 `NearbyResponse` 字段、WGS84/GCJ-02 转换责任、服务端距离过滤与排序、错误、演示/高德来源及回退状态（含空结果）、拒绝定位时显式选择演示区域的流程、详情按 ID 来源查询且不跨来源回退，以及手动地址解析候选选择方案 |
 | P1-8 | 演示数据版附近接口及地图/列表 | B 主，C 协作 | A | P1-7、P0-2 | 已完成（B 后端 [PR #40](https://github.com/Nexus-226/2026-11-2/pull/40) 已合并；C 页面 [PR #43](https://github.com/Nexus-226/2026-11-2/pull/43) 已合并并完成联调） | 三类演示地点可按距离展示，地图与列表一致，明确标注数据来源；拒绝定位时用户可主动选择“使用演示区域”，清楚标记非实时位置；按 PR Guide 的 P1 种子数据 PR 提交 |
-| P1-9 | 高德真实接入（三天演示可选；完整 P1 必需） | B | A | P1-8；Key 和配额可用 | 进行中（B 侧后端 [PR #46](https://github.com/Nexus-226/2026-11-2/pull/46) 已合并；上游坐标校验、连接池关闭与 geocode 异常分类加固见 [PR #50](https://github.com/Nexus-226/2026-11-2/pull/50)；2026-11-03 B 已用真实高德 Key 通过三类查询、详情与地址解析验证（见下方进展）；前端真实数据联调已由 C 完成（见下方进展）；今日营业时间与推算状态（Issue #82）见 [PR #84](https://github.com/Nexus-226/Pet_Agent/pull/84)） | 真实 POI 查询、去重、排序可用；失败回落演示数据并标注来源；单独提 PR，不阻塞演示数据版 |
+| P1-9 | 高德真实接入（三天演示可选；完整 P1 必需） | B | A | P1-8；Key 和配额可用 | 进行中（B 侧后端 [PR #46](https://github.com/Nexus-226/2026-11-2/pull/46) 已合并；上游坐标校验、连接池关闭与 geocode 异常分类加固见 [PR #50](https://github.com/Nexus-226/2026-11-2/pull/50)；2026-11-03 B 已用真实高德 Key 通过三类查询、详情与地址解析验证（见下方进展）；前端真实数据联调已由 C 完成（见下方进展）；今日营业时间与推算状态（Issue #82）后端见 [PR #84](https://github.com/Nexus-226/Pet_Agent/pull/84)、C 侧展示见 [PR #86](https://github.com/Nexus-226/Pet_Agent/pull/86)） | 真实 POI 查询、去重、排序可用；失败回落演示数据并标注来源；单独提 PR，不阻塞演示数据版 |
 | P1-10 | 定位与手动地址回退 | C，B 协作 | B | P1-7；联调依赖 P1-8 | 已完成（#64/#65 已合并；[Issue #67](https://github.com/Nexus-226/2026-11-2/issues/67) 页面、模拟定位成功链路与外部导航目标确认） | 有定位用途说明；拒绝定位后可输入地址；导航由用户主动触发 |
 | P1-11 | Agent 附近搜索工具 | A，B 协作 | B、C | P1-7；联调依赖 P1-8 | 已完成（[PR #47](https://github.com/Nexus-226/2026-11-2/pull/47) 已合并进 main：白名单工具经 Service 查询，参数由工具入参 Schema 校验，数据来源与回退如实标注） | 白名单工具通过 Service 查询，参数、数据来源和异常正确处理 |
 | P1-12 | 地图端到端验收 | A、B、C | 三人共同验收 | P1-8、P1-10、P1-11；完整 P1 验收还依赖 P1-9 | 已完成（[Issue #67](https://github.com/Nexus-226/2026-11-2/issues/67)：C 验收及 A/B 最终确认齐备；#59/#61/#64/#65 已合并） | 验证三类地点、定位拒绝/手动地址、空结果与失败路径；记录演示或真实数据来源，完整 P1 须验证真实高德 |
@@ -92,7 +92,8 @@ P1-8 对应 PR Guide 中“种子数据版附近门店”的 PR；P1-9 对应独
 - [PR #84](https://github.com/Nexus-226/Pet_Agent/pull/84)（已合并，main `3a7cfed`）实现推算：`business_hours_today`（去除首尾空白后的原文）透出，`business_status` 按北京时间（Asia/Shanghai）从该文本推算——多时段取并集；跨午夜时段的晚间段计为营业，次日结束点之前的凌晨尾段在昨日场次可能仍在营业时保守 `unknown`，避免误判打烊；缺失或无法解析保留 `unknown`。`demo` 地点仍为固定值且 `business_hours_today` 为 null。docs/API.md（P1-7 语义段 + P1-9 实现状态）与 README 已同步；296 项测试（新增推算矩阵与周边/详情管线用例；跨午夜保守判定与 `24:xx` 解析已按 C 侧评审修订）全部使用模拟响应，抽查仅用真实 Key 约 10 次请求，临时脚本已清理。
 - 评审进展：C 侧评审确认契约与推算逻辑可用，提出跨午夜保守判定与 `24:xx` 解析两处非阻塞修订，B 已在本 PR 修订并同步示例与措辞；A 认可 `test_agent_p1_nearby_tools.py` 仅新增 `business_hours_today: None` 夹具的最小适配。
 - A 侧复用（2026-11-05，已完成）：`search_nearby_pet_services` 工具描述与系统提示已说明 `business_hours_today` 为今日营业时间原文；`amap` 的 `business_status` 由后端按北京时间推算，不是实时开关门探测，回答需标注「按今日营业时间推算」；`demo` 状态为演示固定值；原文缺失或状态为 `unknown` 时不得给出开关门结论。[PR #85](https://github.com/Nexus-226/Pet_Agent/pull/85) 经 B 确认可合入，已合并至 main `4064284`；后端 298 项测试与 Ruff 通过。
-- 待办：C 展示今日营业时间并按 API.md 规则标注「按营业时间推算」；跨午夜凌晨时段如需精确判定需解析 `opentime_week`（含脏数据风险），另行评估。
+- C 侧展示已随 [PR #86](https://github.com/Nexus-226/Pet_Agent/pull/86) 提交：`Place.business_hours_today` 类型与 Client 校验、卡片展示「今日营业时间」，仅当原文非 null 且 `business_status` 非 `unknown` 时标「按营业时间推算」（原文存在但 unknown 时只展示原文、不下开关门结论）；前端 104 项测试、`npm run build` 与改动文件 Prettier 通过，均用模拟响应。
+- 待办：跨午夜凌晨时段如需精确判定需解析 `opentime_week`（含脏数据风险），另行评估。
 
 记录/提醒的实现边界与演示场景见下文“P1 记录与提醒实施说明”。
 

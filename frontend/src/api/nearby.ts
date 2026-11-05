@@ -66,6 +66,8 @@ async function request(path: string): Promise<NearbyResponse> {
           String(place.category),
         ) &&
         ["open", "closed", "unknown"].includes(String(place.business_status)) &&
+        (place.business_hours_today === null ||
+          typeof place.business_hours_today === "string") &&
         ["demo", "amap"].includes(String(place.data_source)) &&
         Number.isInteger(place.distance_m) &&
         Number(place.distance_m) >= 0 &&

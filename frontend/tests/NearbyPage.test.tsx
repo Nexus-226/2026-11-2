@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import NearbyPage from "../src/pages/NearbyPage";
-import type { AddressMatch, NearbyResponse } from "../src/types/nearby";
+import type { AddressMatch, NearbyResponse, Place } from "../src/types/nearby";
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn(),
@@ -37,6 +37,7 @@ function demoResponse(overrides?: Partial<NearbyResponse>): NearbyResponse {
         location: { lat: 39.9041, lng: 116.4021 },
         distance_m: 480,
         business_status: "unknown",
+        business_hours_today: null,
         navigation_url: null,
         data_source: "demo",
       },
@@ -49,6 +50,7 @@ function demoResponse(overrides?: Partial<NearbyResponse>): NearbyResponse {
         location: { lat: 39.9201, lng: 116.3901 },
         distance_m: 2381,
         business_status: "open",
+        business_hours_today: null,
         navigation_url: null,
         data_source: "demo",
       },
@@ -61,6 +63,36 @@ function demoResponse(overrides?: Partial<NearbyResponse>): NearbyResponse {
     source: "demo",
     fallback_reason: null,
     ...overrides,
+  };
+}
+
+function amapPlace(overrides?: Partial<Place>): Place {
+  return {
+    id: "amap:B0REAL1",
+    name: "安心宠物医院",
+    category: "pet_hospital",
+    address: "示例路 18 号",
+    phone: null,
+    location: { lat: 39.913345, lng: 116.384047 },
+    distance_m: 900,
+    business_status: "open",
+    business_hours_today: "09:00-21:00",
+    navigation_url: null,
+    data_source: "amap",
+    ...overrides,
+  };
+}
+
+function amapResponse(places: Place[]): NearbyResponse {
+  return {
+    places,
+    search_center: {
+      location: { lat: 39.91, lng: 116.4 },
+      source: "user_location",
+      label: "当前位置",
+    },
+    source: "amap",
+    fallback_reason: null,
   };
 }
 
@@ -491,6 +523,7 @@ it("offers user-triggered amap navigation only for real places", async () => {
           location: { lat: 39.9041, lng: 116.4021 },
           distance_m: 480,
           business_status: "unknown",
+          business_hours_today: null,
           navigation_url: null,
           data_source: "demo",
         },
@@ -503,6 +536,7 @@ it("offers user-triggered amap navigation only for real places", async () => {
           location: { lat: 39.913345, lng: 116.384047 },
           distance_m: 900,
           business_status: "unknown",
+          business_hours_today: null,
           navigation_url: null,
           data_source: "amap",
         },
@@ -524,4 +558,59 @@ it("offers user-triggered amap navigation only for real places", async () => {
   expect(nav.getAttribute("target")).toBe("_blank");
   // 演示地点是虚构数据，不提供导航入口。
   expect(screen.queryByRole("link", { name: /演示动物医院/ })).toBeNull();
+});
+
+it("shows today's business hours and marks inferred status for real places", async () => {
+  geo.getCurrentPosition.mockImplementation(
+    (
+      success: (p: { coords: { latitude: number; longitude: number } }) => void,
+    ) => success({ coords: { latitude: 39.91, longitude: 116.4 } }),
+  );
+  mocks.search.mockResolvedValue(
+    amapResponse([
+      amapPlace({
+        business_status: "open",
+        business_hours_today: "09:00-21:00",
+      }),
+    ]),
+  );
+  render(<NearbyPage onNavigate={() => {}} />);
+  fireEvent.click(screen.getByText("查找附近的宠物服务"));
+  await screen.findByText("安心宠物医院");
+  expect(screen.getByText("今日营业时间：09:00-21:00")).toBeTruthy();
+  // 状态来自营业时间推算，须明确标注，避免用户误以为是高德直接给出的状态。
+  expect(screen.getByText(/按营业时间推算/)).toBeTruthy();
+});
+
+it("shows raw business hours without an open/closed conclusion when unparseable", async () => {
+  geo.getCurrentPosition.mockImplementation(
+    (
+      success: (p: { coords: { latitude: number; longitude: number } }) => void,
+    ) => success({ coords: { latitude: 39.91, longitude: 116.4 } }),
+  );
+  mocks.search.mockResolvedValue(
+    amapResponse([
+      amapPlace({
+        business_status: "unknown",
+        business_hours_today: "周末休息",
+      }),
+    ]),
+  );
+  render(<NearbyPage onNavigate={() => {}} />);
+  fireEvent.click(screen.getByText("查找附近的宠物服务"));
+  await screen.findByText("安心宠物医院");
+  // 原文透出供展示，但状态保持 unknown，不给开关门结论、不标「推算」。
+  expect(screen.getByText("今日营业时间：周末休息")).toBeTruthy();
+  expect(screen.getByText(/营业状态未知/)).toBeTruthy();
+  expect(screen.queryByText(/按营业时间推算/)).toBeNull();
+});
+
+it("does not mark demo places as inferred and shows no business hours", async () => {
+  render(<NearbyPage onNavigate={() => {}} />);
+  fireEvent.click(screen.getByText("使用演示区域"));
+  await screen.findByText("演示动物医院（示例）");
+  // 演示地点的 business_status 是固定值、business_hours_today 恒为 null，
+  // 因此不显示营业时间，也不标注「按营业时间推算」。
+  expect(screen.queryByText(/今日营业时间/)).toBeNull();
+  expect(screen.queryByText(/按营业时间推算/)).toBeNull();
 });
