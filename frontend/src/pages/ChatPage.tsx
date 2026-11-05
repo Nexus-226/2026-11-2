@@ -7,6 +7,7 @@ import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import AssistantMessage from "../components/chat/AssistantMessage";
 import type { ChatRequest } from "../types/chat";
 import type { Pet } from "../types/pet";
+import type { RecordDraft } from "../types/records";
 
 interface ChatPageProps {
   active: boolean;
@@ -17,6 +18,7 @@ interface Message {
   key: number;
   role: "user" | "assistant";
   text: string;
+  draft?: RecordDraft | null;
 }
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -154,6 +156,7 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
           key: ++nextMessageKey.current,
           role: "assistant",
           text: response.reply,
+          draft: response.draft ?? null,
         },
       ]);
     } catch (error) {
@@ -405,7 +408,37 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
                       </span>
                       <div className="message-bubble">
                         {message.role === "assistant" ? (
-                          <AssistantMessage text={message.text} />
+                          <>
+                            <AssistantMessage text={message.text} />
+                            {message.draft && (
+                              <div className="record-draft-card" role="status">
+                                <span
+                                  className="record-draft-icon"
+                                  aria-hidden="true"
+                                >
+                                  ✦
+                                </span>
+                                <div className="record-draft-body">
+                                  <strong>洗澡记录草稿</strong>
+                                  <span>
+                                    {pets.find(
+                                      (p) => p.id === message.draft?.pet_id,
+                                    )?.name ?? "已登记宠物"}{" "}
+                                    · {message.draft.occurred_on}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="button"
+                                  onClick={() =>
+                                    shared?.openRecordDraft(message.draft!)
+                                  }
+                                >
+                                  去填写并保存
+                                </button>
+                              </div>
+                            )}
+                          </>
                         ) : (
                           message.text
                         )}

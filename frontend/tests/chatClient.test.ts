@@ -73,4 +73,44 @@ describe("对话 API Client", () => {
       chatClient.send(request, new AbortController().signal),
     ).rejects.toThrow("不符合接口约定");
   });
+
+  it("接受带洗澡记录草稿的响应", async () => {
+    const draft = {
+      record_type: "bath",
+      occurred_on: "2026-01-01",
+      pet_id: "b8f34f24-f5cf-4b5c-8d40-073541725a11",
+      name: null,
+      notes: null,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ...response, draft }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const { chatClient } = await import("../src/api/chat");
+    const result = await chatClient.send(request, new AbortController().signal);
+    expect(result.draft).toEqual(draft);
+  });
+
+  it("拒绝草稿字段不合法的响应", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ ...response, draft: { record_type: "vaccine" } }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        ),
+    );
+    const { chatClient } = await import("../src/api/chat");
+    await expect(
+      chatClient.send(request, new AbortController().signal),
+    ).rejects.toThrow("不符合接口约定");
+  });
 });

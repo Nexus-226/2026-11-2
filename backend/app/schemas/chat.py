@@ -3,6 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agent.chat import ToolCallSummary
+from app.agent.schemas import RecordDraft
 
 
 class ChatRequest(BaseModel):
@@ -26,3 +27,5 @@ class ChatResponse(BaseModel):
     message_id: UUID
     reply: str
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
+    # P2：可选字段；为 null 时表示本轮没有生成记录草稿。保持向后兼容，旧客户端忽略。
+    draft: RecordDraft | None = None

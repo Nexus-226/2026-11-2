@@ -11,13 +11,14 @@ from app.agent.service_protocol import (
 )
 from app.agent.tools.nearby import make_nearby_tools
 from app.agent.tools.pets import make_pet_tools
-from app.agent.tools.records import make_record_tools
+from app.agent.tools.records import make_record_draft_tool, make_record_tools
 from app.agent.tools.reminders import make_reminder_tools
 
 __all__ = [
     "build_default_registry",
     "make_nearby_tools",
     "make_pet_tools",
+    "make_record_draft_tool",
     "make_record_tools",
     "make_reminder_tools",
 ]
@@ -40,6 +41,8 @@ def build_default_registry(
     registry = ToolRegistry()
     for tool in make_pet_tools(service):
         registry.register(tool)
+    # P2 草稿工具不依赖任何 Service（只读、不写入），始终注册。
+    registry.register(make_record_draft_tool())
     if record_service is not None:
         for tool in make_record_tools(record_service, current_pet_id):
             registry.register(tool)

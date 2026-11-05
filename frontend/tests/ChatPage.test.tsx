@@ -184,6 +184,33 @@ describe("聊天页面", () => {
     expect(screen.getByRole("button", { name: "重试" })).toBeTruthy();
     expect((mocks.send.mock.calls[0][1] as AbortSignal).aborted).toBe(true);
   });
+
+  it("回复带洗澡记录草稿时渲染草稿卡", async () => {
+    const user = userEvent.setup();
+    mocks.send.mockResolvedValue({
+      ...response,
+      reply: "已生成洗澡记录草稿，请核对后保存。",
+      draft: {
+        record_type: "bath",
+        occurred_on: "2026-01-01",
+        pet_id: pet.id,
+        name: null,
+        notes: null,
+      },
+    });
+    const { container } = render(<ChatPage active onNavigate={vi.fn()} />);
+    await screen.findByRole("option", { name: "豆豆" });
+    await user.type(
+      screen.getByLabelText("输入你的问题"),
+      "帮我记一下豆豆昨天洗澡了",
+    );
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await screen.findByText("洗澡记录草稿");
+    const body = container.querySelector(".record-draft-body");
+    expect(body?.textContent).toContain("豆豆");
+    expect(body?.textContent).toContain("2026-01-01");
+    expect(screen.getByRole("button", { name: "去填写并保存" })).toBeTruthy();
+  });
 });
 
 describe("P0-8 前端会话边界", () => {

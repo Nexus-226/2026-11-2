@@ -130,18 +130,36 @@ PATCH 中，省略字段表示不修改；`breed`、`birthday`、`notes`、`othe
 
 - `message` 必填，去除首尾空格后 1–4000 字符；`pet_id` 可为 UUID 或 `null`；`session_id` 可为 UUID 或 `null`。省略可选字段等同 `null`。
 - `session_id:null` 创建会话；传入不存在的会话返回 `404 SESSION_NOT_FOUND`。传入不存在的宠物返回 `404 PET_NOT_FOUND`；关联宠物由本次 `pet_id` 显式指定，`null` 表示本次不使用宠物资料。
-- `200` 返回如下结构；`tool_calls` 只列出工具名称及状态，不泄露参数、原始结果或密钥；无调用时为 `[]`：
+- `200` 返回如下结构；`tool_calls` 只列出工具名称及状态，不泄露参数、原始结果或密钥；无调用时为 `[]`。`draft` 为可选的洗澡记录草稿（P2），无草稿时为 `null`：
 
 ```json
 {
   "session_id":"d57700a2-a0a3-4bea-822c-9a8544def58e",
   "message_id":"b0276f42-1264-4ac3-ac75-5d58269e8758",
   "reply":"可以根据豆豆的年龄安排日常护理……",
-  "tool_calls":[{"name":"get_pet_profile","status":"success"}]
+  "tool_calls":[{"name":"get_pet_profile","status":"success"}],
+  "draft":null
 }
 ```
 
 `status` 为 `success` 或 `error`。若无法生成可信回答，返回相应错误状态码，不伪造回复。医疗信息需提醒仅供参考，紧急情况联系兽医。会话及消息持久化由 B 负责；Agent 的工具选择和输出组织由 A 负责；前端显示加载、错误和取消状态由 C 负责。
+
+### 对话中的洗澡记录草稿（P2）
+
+当用户明确要求记录一次已发生的洗澡、且宠物和日期都已明确时，Agent 只生成结构化草稿并放入响应的 `draft` 字段，**不写入记录**；写入由页面确认按钮触发 `POST /api/v1/records`。`draft` 为 `null` 表示本轮没有生成草稿。首版只支持 `record_type=bath`：
+
+```json
+{
+  "record_type": "bath",
+  "occurred_on": "2026-11-04",
+  "pet_id": "b8f34f24-f5cf-4b5c-8d40-073541725a11",
+  "name": null,
+  "notes": null
+}
+```
+
+- `record_type` 固定为 `bath`；`occurred_on` 为 `Asia/Shanghai` 日历日期，不得晚于当天；`pet_id` 为已登记宠物的 UUID；`name`、`notes` 可空。
+- Agent 的业务工具保持只读；`draft` 只是预填表单的草稿，绝不表示已保存。宠物不明确、同名或日期含糊时先澄清，不生成草稿。切换关联宠物或会话后旧草稿失效。
 
 当前后端路由已接入 A 的 `run_chat`，使用 `BoundPetService` 绑定请求级数据库会话；传入不存在的 `pet_id` 时在调用 Agent 前返回 `404 PET_NOT_FOUND`。会话、用户消息和助手回复持久化到 SQLite。当前已接入 Qwen Provider：配置 LLM_API_KEY 时使用真实模型，否则使用 MockProvider。P0-8 已完成验收：数据库历史已接入模型上下文，切换或清空关联宠物时由页面重置会话；具体实现与验证范围见 TASKS.md。
 

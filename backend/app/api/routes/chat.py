@@ -105,4 +105,5 @@ def create_chat(
         message_id=assistant_message.id,
         reply=result.reply,
         tool_calls=result.tool_calls,
+        draft=result.draft,
     )

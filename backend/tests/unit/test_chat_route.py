@@ -236,6 +236,62 @@ def test_chat_route_registers_nearby_tool_with_real_service(
     assert result["reply"] == "实时高德服务未接入，以下为演示数据，仅供参考。"
 
 
+def test_chat_route_returns_bath_record_draft(
+    chat_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = chat_client
+    pet_id = client.post(
+        "/api/v1/pets", json={"name": "豆豆", "species": "dog"}
+    ).json()["id"]
+
+    from app.api.routes.chat import get_llm_provider
+
+    app.dependency_overrides[get_llm_provider] = lambda: MockProvider(
+        [
+            ProviderTurn(
+                tool_call=ToolCallRequest(
+                    name="propose_record_draft",
+                    args={"occurred_on": "2026-01-01", "pet_id": pet_id},
+                )
+            ),
+            ProviderTurn(reply="已生成洗澡记录草稿，请核对后保存。"),
+        ]
+    )
+
+    response = client.post(
+        "/api/v1/chat",
+        json={"message": "帮我记一下豆豆昨天洗澡了", "pet_id": pet_id},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["draft"] == {
+        "record_type": "bath",
+        "occurred_on": "2026-01-01",
+        "pet_id": pet_id,
+        "name": None,
+        "notes": None,
+    }
+    assert result["tool_calls"] == [
+        {"name": "propose_record_draft", "status": "success"}
+    ]
+    assert result["reply"] == "已生成洗澡记录草稿，请核对后保存。"
+
+
+def test_chat_route_returns_null_draft_when_no_tool(
+    chat_client: tuple[TestClient, Engine],
+) -> None:
+    client, _ = chat_client
+    from app.api.routes.chat import get_llm_provider
+
+    app.dependency_overrides[get_llm_provider] = lambda: MockProvider(
+        [ProviderTurn(reply="好的。")]
+    )
+
+    response = client.post("/api/v1/chat", json={"message": "你好"})
+    assert response.status_code == 200
+    assert response.json()["draft"] is None
+
+
 def test_chat_route_returns_pet_not_found_instead_of_internal_error(
     chat_client: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch
 ) -> None:

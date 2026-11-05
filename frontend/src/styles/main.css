@@ -843,6 +843,35 @@ h1 {
   color: #fff;
   border-radius: 14px 4px 14px 14px;
 }
+.record-draft-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #e5ede2;
+  color: #405647;
+  white-space: normal;
+}
+.record-draft-icon {
+  flex: none;
+  color: #335f48;
+}
+.record-draft-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.record-draft-body strong {
+  color: #335f48;
+}
+.record-draft-card .button {
+  flex: none;
+  white-space: nowrap;
+}
 .assistant-markdown {
   white-space: normal;
 }

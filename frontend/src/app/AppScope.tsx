@@ -9,6 +9,7 @@ import {
 } from "react";
 import { petClient } from "../api/pets";
 import type { Pet } from "../types/pet";
+import type { RecordDraft } from "../types/records";
 import type { AppPage } from "../components/common/AppHeader";
 export type Transition = "pet" | "page";
 type Guard = {
@@ -26,6 +27,7 @@ interface AppScope {
   notice: string;
   createVersion: number;
   creatingPet: boolean;
+  recordDraft: RecordDraft | null;
   finishCreate: () => void;
   navigate: (page: AppPage) => boolean;
   selectPet: (id: string | null) => boolean;
@@ -35,6 +37,8 @@ interface AppScope {
   publishPet: (pet: Pet, select?: boolean) => void;
   removePet: (id: string) => void;
   createPet: () => void;
+  openRecordDraft: (draft: RecordDraft) => boolean;
+  clearRecordDraft: () => void;
 }
 const Context = createContext<AppScope | null>(null);
 export const useAppScope = () => useContext(Context);
@@ -54,7 +58,8 @@ export function AppScopeProvider({ children }: { children: ReactNode }) {
     [notice, setNotice] = useState(""),
     [reload, setReload] = useState(0),
     [createVersion, setCreateVersion] = useState(0),
-    [creatingPet, setCreatingPet] = useState(false);
+    [creatingPet, setCreatingPet] = useState(false),
+    [recordDraft, setRecordDraft] = useState<RecordDraft | null>(null);
   const guards = useRef(new Map<string, () => Guard>()),
     petsRef = useRef<Pet[]>([]),
     currentId = useRef<string | null>(null),
@@ -70,6 +75,8 @@ export function AppScopeProvider({ children }: { children: ReactNode }) {
     for (const get of guards.current.values()) get().onPetChange?.();
     currentId.current = id;
     setPetId(id);
+    // 切换或清空关联宠物后，旧记录草稿失效。
+    setRecordDraft(null);
   }
   const authorize = useCallback((kind: Transition, exclude?: string) => {
     const entries = [...guards.current.entries()]
@@ -167,6 +174,19 @@ export function AppScopeProvider({ children }: { children: ReactNode }) {
     setPage("pets");
     setNotice("");
   }
+  function openRecordDraft(draft: RecordDraft) {
+    if (!authorize("page")) return false;
+    for (const get of guards.current.values()) get().onLeave?.();
+    setRecordDraft(draft);
+    setNotice("");
+    setCreatingPet(false);
+    setPage("records");
+    window.scrollTo?.({ top: 0 });
+    return true;
+  }
+  function clearRecordDraft() {
+    setRecordDraft(null);
+  }
   return (
     <Context.Provider
       value={{
@@ -178,6 +198,7 @@ export function AppScopeProvider({ children }: { children: ReactNode }) {
         notice,
         createVersion,
         creatingPet,
+        recordDraft,
         finishCreate: () => setCreatingPet(false),
         navigate,
         selectPet,
@@ -187,6 +208,8 @@ export function AppScopeProvider({ children }: { children: ReactNode }) {
         publishPet,
         removePet,
         createPet,
+        openRecordDraft,
+        clearRecordDraft,
       }}
     >
       {children}

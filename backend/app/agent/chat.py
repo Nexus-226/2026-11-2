@@ -19,7 +19,7 @@ from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.providers.base import LLMProvider
 from app.agent.providers.factory import build_default_provider
 from app.agent.runtime import MAX_TOOL_CALLS_PER_TURN, AgentRuntime
-from app.agent.schemas import ChatHistoryMessage, ToolResult
+from app.agent.schemas import ChatHistoryMessage, RecordDraft, ToolResult
 from app.agent.service_protocol import (
     NearbyService,
     PetService,
@@ -34,6 +34,9 @@ from app.schemas.pet import PetRead
 MAX_HISTORY_MESSAGES = 20
 MAX_HISTORY_CHARS = 8000
 
+# P2：生成洗澡记录草稿的工具名；run_chat 捕获其成功参数作为 ChatReply.draft。
+RECORD_DRAFT_TOOL = "propose_record_draft"
+
 
 class ToolCallSummary(BaseModel):
     """chat 响应里的 tool_calls 项：只暴露名称和状态，不泄露参数/结果。"""
@@ -47,6 +50,7 @@ class ChatReply(BaseModel):
 
     reply: str
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
+    draft: RecordDraft | None = None
 
 
 def _select_history(
@@ -153,6 +157,7 @@ def run_chat(
     summaries: list[ToolCallSummary] = []
     results: list[ToolResult] = []
     tool_call_count = 0
+    draft: RecordDraft | None = None
 
     while True:
         turn = provider.next_turn(
@@ -164,15 +169,24 @@ def run_chat(
             history=selected_history if tool_call_count == 0 else None,
         )
         if turn.reply is not None:
-            return ChatReply(reply=turn.reply, tool_calls=summaries)
+            return ChatReply(reply=turn.reply, tool_calls=summaries, draft=draft)
         if turn.tool_call is None:
-            return ChatReply(reply="抱歉，我暂时无法回答。", tool_calls=summaries)
+            return ChatReply(
+                reply="抱歉，我暂时无法回答。", tool_calls=summaries, draft=draft
+            )
         if tool_call_count >= max_tool_calls:
             return ChatReply(
                 reply="抱歉，这个问题需要更多信息，我暂时无法回答。",
                 tool_calls=summaries,
+                draft=draft,
             )
         result = runtime.run_tools([turn.tool_call])[0]
         tool_call_count += 1
         results.append(result)
         summaries.append(ToolCallSummary(name=result.name, status=result.status))
+        if (
+            turn.tool_call.name == RECORD_DRAFT_TOOL
+            and result.status == "success"
+            and isinstance(result.data, RecordDraft)
+        ):
+            draft = result.data

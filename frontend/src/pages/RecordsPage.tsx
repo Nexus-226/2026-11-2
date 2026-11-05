@@ -47,6 +47,7 @@ export default function RecordsPage({
     [weight, setWeight] = useState(""),
     [notes, setNotes] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [draftPetId, setDraftPetId] = useState<string | null>(null);
   const formRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (formOpen)
@@ -59,6 +60,8 @@ export default function RecordsPage({
       ? "unlinked"
       : shared.petId || "unlinked"
     : localScope;
+  // 聊天草稿可指定记录归属宠物，独立于“查看范围”；切换范围/宠物时由 reset 清空。
+  const formPetId = draftPetId ?? (scope === "unlinked" ? null : scope);
   useEffect(() => {
     if (shared) {
       setPets(shared.pets);
@@ -119,6 +122,7 @@ export default function RecordsPage({
     setName("");
     setWeight("");
     setNotes("");
+    setDraftPetId(null);
     setFormError("");
   }
   const currentItems = items.filter(
@@ -141,6 +145,22 @@ export default function RecordsPage({
     onPetChange: reset,
     onLeave: reset,
   });
+  useEffect(() => {
+    const draft = shared?.recordDraft;
+    if (!draft) return;
+    setDraftPetId(draft.pet_id);
+    setType(draft.record_type);
+    setDate(draft.occurred_on);
+    setName(draft.name ?? "");
+    setNotes(draft.notes ?? "");
+    setWeight("");
+    setEditing(null);
+    setFormError("");
+    setFormOpen(true);
+    shared.clearRecordDraft();
+    // 只跟随草稿值变化消费一次，不依赖 shared 身份。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared?.recordDraft]);
   async function save(e: FormEvent) {
     e.preventDefault();
     setFormError("");
@@ -160,7 +180,7 @@ export default function RecordsPage({
     }
     setBusy(true);
     const input = {
-      pet_id: scope === "unlinked" ? null : scope,
+      pet_id: formPetId,
       record_type: type,
       occurred_on: date,
       name: name.trim() || null,
@@ -386,9 +406,9 @@ export default function RecordsPage({
                 <h2>{editing ? "编辑记录" : "添加记录"}</h2>
                 <p>
                   当前：
-                  {scope === "unlinked"
-                    ? "未关联宠物"
-                    : (pets.find((p) => p.id === scope)?.name ?? "所选宠物")}
+                  {formPetId
+                    ? (pets.find((p) => p.id === formPetId)?.name ?? "所选宠物")
+                    : "未关联宠物"}
                 </p>
               </div>
               <span className="form-flower" aria-hidden="true">

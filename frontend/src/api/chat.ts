@@ -1,8 +1,26 @@
 import type { ChatClient, ChatRequest, ChatResponse } from "../types/chat";
+import type { RecordDraft } from "../types/records";
+
+function isRecordDraft(value: unknown): value is RecordDraft {
+  if (!value || typeof value !== "object") return false;
+  const draft = value as Record<string, unknown>;
+  return (
+    draft.record_type === "bath" &&
+    typeof draft.occurred_on === "string" &&
+    draft.occurred_on.length > 0 &&
+    typeof draft.pet_id === "string" &&
+    draft.pet_id.length > 0 &&
+    (draft.name === null || typeof draft.name === "string") &&
+    (draft.notes === null || typeof draft.notes === "string")
+  );
+}
 
 function isChatResponse(value: unknown): value is ChatResponse {
   if (!value || typeof value !== "object") return false;
   const response = value as Record<string, unknown>;
+  const draft = response.draft;
+  // draft 是可选扩展：缺失或 null 都按“无草稿”处理，保持向后兼容。
+  const draftOk = draft === undefined || draft === null || isRecordDraft(draft);
   return (
     typeof response.session_id === "string" &&
     response.session_id.length > 0 &&
@@ -18,7 +36,8 @@ function isChatResponse(value: unknown): value is ChatResponse {
         typeof (item as Record<string, unknown>).name === "string" &&
         ((item as Record<string, unknown>).status === "success" ||
           (item as Record<string, unknown>).status === "error"),
-    )
+    ) &&
+    draftOk
   );
 }
 
@@ -90,6 +109,7 @@ const demoClient: ChatClient = {
           reply:
             "这是演示回复，用来检查聊天界面。当前没有连接真实模型，请勿将此内容当作宠物护理建议。",
           tool_calls: [],
+          draft: null,
         });
       }, 500);
       signal.addEventListener("abort", onAbort, { once: true });

@@ -19,6 +19,14 @@ export interface RecordFilter {
   from_date?: string;
   to_date?: string;
 }
+// P2：聊天响应里的洗澡记录草稿；只用于预填记录表单，不代表已保存。
+export interface RecordDraft {
+  record_type: "bath";
+  occurred_on: string;
+  pet_id: string;
+  name: string | null;
+  notes: string | null;
+}
 export function shanghaiToday() {
   const parts = new Intl.DateTimeFormat("en", {
     timeZone: "Asia/Shanghai",

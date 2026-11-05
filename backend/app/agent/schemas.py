@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class GetPetProfileInput(BaseModel):
@@ -65,6 +66,33 @@ class SearchNearbyPetServicesInput(BaseModel):
     type: Literal["pet_hospital", "pet_grooming", "pet_store"]
     radius_m: int = Field(default=3000, ge=1000, le=20000)
     center_source: Literal["user_location", "resolved_address"] = "user_location"
+
+
+class RecordDraft(BaseModel):
+    """P2：Agent 生成的洗澡记录草稿，仅用于预填表单，不代表已写入。
+
+    首版只支持为一只已登记宠物新增一条已发生的洗澡记录（``record_type`` 固定
+    ``bath``）。写入由页面确认按钮触发 ``POST /api/v1/records``；Agent 本身仍只读。
+    ``occurred_on`` 为 ``Asia/Shanghai`` 日历日期，不得晚于当天。
+    """
+
+    record_type: Literal["bath"] = "bath"
+    occurred_on: date
+    pet_id: UUID
+    name: str | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @field_validator("occurred_on")
+    @classmethod
+    def no_future_date(cls, value: date) -> date:
+        if value > datetime.now(ZoneInfo("Asia/Shanghai")).date():
+            raise ValueError("occurred_on cannot be in the future")
+        return value
 
 
 class ChatHistoryMessage(BaseModel):
