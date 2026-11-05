@@ -21,6 +21,7 @@ export interface Place {
   location: GeoLocation;
   distance_m: number;
   business_status: BusinessStatus;
+  business_hours_today: string | null;
   navigation_url: string | null;
   data_source: NearbyDataSource;
 }
