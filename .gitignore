@@ -20,6 +20,7 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+vlog-media/
 frontend/coverage/
 *.egg-info/
 .mypy_cache/

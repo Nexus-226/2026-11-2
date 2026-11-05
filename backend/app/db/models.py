@@ -134,6 +134,59 @@ class Reminder(Base):
     )
 
 
+class VlogPost(Base):
+    """私人宠物 Vlog 条目（P2，单用户本地版，与既有记录分开）。"""
+
+    __tablename__ = "vlog_posts"
+    __table_args__ = (
+        Index("ix_vlog_posts_user_pet_occurred", "user_id", "pet_id", "occurred_on"),
+        Index("ix_vlog_posts_user_occurred", "user_id", "occurred_on"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=False
+    )
+    pet_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("pets.id", ondelete="RESTRICT"), nullable=False
+    )
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    occurred_on: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class VlogMedia(Base):
+    """Vlog 媒体文件元数据；文件本体存放在应用外的本地私有目录。"""
+
+    __tablename__ = "vlog_media"
+    __table_args__ = (
+        CheckConstraint(
+            "media_type IN ('image', 'video')",
+            name="ck_vlog_media_media_type",
+        ),
+        UniqueConstraint("storage_key", name="uq_vlog_media_storage_key"),
+        Index("ix_vlog_media_vlog", "vlog_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    vlog_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("vlog_posts.id", ondelete="CASCADE"), nullable=False
+    )
+    storage_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 

@@ -15,6 +15,7 @@ from app.services.record_service import ensure_pet_can_be_deleted
 from app.services.reminder_service import (
     ensure_pet_can_be_deleted as ensure_pet_has_no_reminders,
 )
+from app.services.vlog_service import delete_vlogs_for_pet as delete_pet_vlogs
 
 
 def list_pets(session: Session) -> list[Pet]:
@@ -93,4 +94,6 @@ def delete_pet(session: Session, pet_id: UUID) -> None:
     pet = get_pet_or_404(session, pet_id)
     ensure_pet_can_be_deleted(session, pet_id)
     ensure_pet_has_no_reminders(session, pet_id)
+    # P2 提案：删除宠物时同步处理关联 Vlog 媒体（文件先回收，失败可重试）。
+    delete_pet_vlogs(session, pet_id)
     pet_repository.delete_pet(session, pet)

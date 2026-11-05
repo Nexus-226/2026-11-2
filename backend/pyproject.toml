@@ -10,6 +10,7 @@ dependencies = [
     "alembic>=1.13,<2",
     "fastapi>=0.115,<1",
     "httpx>=0.27,<1",
+    "python-multipart>=0.0.9,<0.1",
     "sqlalchemy>=2,<3",
     "typing-extensions>=4.6,<5",
     "tzdata>=2024.1",
