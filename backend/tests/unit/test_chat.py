@@ -162,6 +162,100 @@ def test_run_chat_prompt_distinguishes_name_and_nickname() -> None:
     assert "不得额外声称档案名称" in captured["system_prompt"]
 
 
+def test_run_chat_prompt_names_associated_pet() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    pet = _pet().model_copy(update={"name": "dodo"})
+    run_chat(
+        "dodo 是什么动物？",
+        PET_ID,
+        FakePetService([pet]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "名字「dodo」" in prompt
+    assert "优先按这只关联宠物理解" in prompt
+    assert str(PET_ID) in prompt
+
+
+def test_run_chat_prompt_warns_not_to_equate_other_names() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "dodo 是什么动物？",
+        PET_ID,
+        FakePetService([_pet()]),
+        provider=CapturingProvider(),
+    )
+    assert "不要自动当成这只关联宠物" in captured["system_prompt"]
+    assert "先调用 list_pets 核对" in captured["system_prompt"]
+
+
+def test_run_chat_prompt_labels_other_species_pet() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    pet = _pet().model_copy(update={"species": "other", "other_species": "兔"})
+    run_chat(
+        "它是什么物种？",
+        PET_ID,
+        FakePetService([pet]),
+        provider=CapturingProvider(),
+    )
+    assert "具体物种：兔" in captured["system_prompt"]
+
+
+def test_run_chat_prompt_labels_other_species_empty() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    pet = _pet().model_copy(update={"species": "other", "other_species": None})
+    run_chat(
+        "它是什么物种？",
+        PET_ID,
+        FakePetService([pet]),
+        provider=CapturingProvider(),
+    )
+    assert "other（未填具体物种）" in captured["system_prompt"]
+
+
+def test_run_chat_prompt_falls_back_to_id_when_pet_missing() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "它是什么动物？",
+        PET_ID,
+        FakePetService([]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "名字「" not in prompt
+    assert "当前关联宠物 pet_id=" in prompt
+
+
 def test_run_chat_prompt_references_other_species() -> None:
     captured: dict[str, str] = {}
 

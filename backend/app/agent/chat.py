@@ -27,6 +27,7 @@ from app.agent.service_protocol import (
     ReminderService,
 )
 from app.agent.tools import build_default_registry
+from app.schemas.pet import PetRead
 
 # 最近 10 个完整轮次（20 条消息）；字符数只是保守预算，给系统提示、本次问题、
 # 工具定义、当前工具结果和输出预留空间，不视为精确 token 计数。
@@ -84,6 +85,15 @@ def _select_history(
     return selected
 
 
+def _associated_pet_species(pet: PetRead) -> str:
+    """关联宠物的物种说明，沿用 other/other_species 语义。"""
+    if pet.species == "other":
+        if pet.other_species:
+            return f"other（具体物种：{pet.other_species}）"
+        return "other（未填具体物种）"
+    return pet.species
+
+
 def run_chat(
     message: str,
     pet_id: UUID | None,
@@ -120,7 +130,20 @@ def run_chat(
         + f" “本周”指 {monday.isoformat()}（周一）至 {sunday.isoformat()}（周日）。"
     )
     if pet_id is not None:
-        system += f" 当前关联宠物 pet_id={pet_id}。"
+        associated_pet = service.get_pet(pet_id)
+        if associated_pet is not None:
+            species = _associated_pet_species(associated_pet)
+            system += (
+                f" 当前关联宠物：名字「{associated_pet.name}」，"
+                f"species={species}，pet_id={pet_id}。"
+                f"当用户提到这只宠物的名字「{associated_pet.name}」，"
+                "或“它/这只宠物/当前宠物”时，优先按这只关联宠物理解并回答；"
+                "用户提到的是其他名字时，不要自动当成这只关联宠物，也不要未查询就断言"
+                "档案里没有该名字：先调用 list_pets 核对是否有这只宠物，"
+                "列表里确实没有时再如实说明没有。需要档案详情时调用 get_pet_profile 查询。"
+            )
+        else:
+            system += f" 当前关联宠物 pet_id={pet_id}。"
     else:
         system += (
             " 当前未关联任何宠物；用户用“它/这只宠物/当前宠物”指代时，"
