@@ -256,6 +256,46 @@ def test_run_chat_prompt_falls_back_to_id_when_pet_missing() -> None:
     assert "当前关联宠物 pet_id=" in prompt
 
 
+def test_run_chat_prompt_notes_default_brief() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "脱皮期是什么时候？",
+        None,
+        FakePetService([]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "引用或准确概括" in prompt
+    assert "内部字段名" in prompt
+    assert "明确要求解释日期" in prompt
+    assert "不得把推断说成已保存的档案事实" in prompt
+
+
+def test_run_chat_prompt_does_not_leak_internal_names() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "豆豆的生日是什么时候？",
+        None,
+        FakePetService([]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "不要泄漏任何内部变量名" in prompt
+    assert "不写进给用户的回答" in prompt
+
+
 def test_run_chat_prompt_references_other_species() -> None:
     captured: dict[str, str] = {}
 
