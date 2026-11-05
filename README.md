@@ -23,6 +23,29 @@ Pet Agent 是一个宠物生活助手。你可以为多只宠物建立档案、�
 | 对话助手 | Python Agent、通义千问（Qwen） |
 | 附近服务 | 高德开放平台 Web 服务 |
 
+## 系统架构
+
+```mermaid
+flowchart TB
+    WEB["Pet Agent 网页（React）"]
+    subgraph BACKEND["Pet Agent 后端"]
+        API["FastAPI 接口"]
+        AGENT["对话助手（Agent）"]
+        SERVICE["业务服务"]
+        API -->|处理对话| AGENT
+        API -->|档案、记录、待办、附近查询| SERVICE
+        AGENT -->|按需调用工具| SERVICE
+    end
+    DB[("SQLite 数据库")]
+    QWEN["通义千问（Qwen）"]
+    AMAP["高德地图 Web 服务"]
+
+    WEB -->|发送请求| API
+    AGENT -->|模型推理| QWEN
+    SERVICE -->|读写资料与对话记录| DB
+    SERVICE -->|地址解析与附近地点查询| AMAP
+```
+
 ## 启动
 
 ### 在线使用
