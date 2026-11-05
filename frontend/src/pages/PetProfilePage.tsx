@@ -1,3 +1,5 @@
+import { useAppScope, useAppGuard } from "../app/AppScope";
+import PetSwitcher from "../components/navigation/PetSwitcher";
 import { useEffect, useState, type FormEvent } from "react";
 import { petClient, usingDemoData } from "../api/pets";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
@@ -71,6 +73,8 @@ export default function PetProfilePage({
 }: {
   onNavigate: (page: AppPage) => void;
 }) {
+  const shared = useAppScope();
+  const [editingProfile, setEditingProfile] = useState(false);
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<FormValues>(emptyForm);
@@ -83,6 +87,24 @@ export default function PetProfilePage({
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (shared) {
+      setPets(shared.pets);
+      setLoading(shared.loading);
+      setLoadError(shared.error);
+      const selected = shared.pets.find((p) => p.id === shared.petId);
+      setSelectedId(selected?.id || null);
+      setForm(
+        shared.creatingPet
+          ? { ...emptyForm }
+          : selected
+            ? formFromPet(selected)
+            : { ...emptyForm },
+      );
+      setCreating(shared.creatingPet);
+      setEditingProfile(false);
+      setFormError("");
+      return;
+    }
     let active = true;
     setLoading(true);
     setLoadError("");
@@ -104,9 +126,37 @@ export default function PetProfilePage({
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [
+    reloadKey,
+    shared?.pets,
+    shared?.petId,
+    shared?.loading,
+    shared?.error,
+    shared?.createVersion,
+    shared?.creatingPet,
+  ]);
 
   const selectedPet = pets.find((pet) => pet.id === selectedId);
+  const baseline = creating
+    ? emptyForm
+    : selectedPet
+      ? formFromPet(selectedPet)
+      : emptyForm;
+  const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+  useAppGuard("profile", {
+    busy,
+    warning: () => (dirty ? "宠物资料尚未保存，继续将丢弃修改。" : null),
+    onPetChange: () => {
+      setForm({ ...emptyForm });
+      setCreating(false);
+      setEditingProfile(false);
+    },
+    onLeave: () => {
+      setForm(selectedPet ? formFromPet(selectedPet) : { ...emptyForm });
+      setCreating(false);
+      setEditingProfile(false);
+    },
+  });
 
   function canLeaveForm() {
     const baseline = creating
@@ -153,6 +203,7 @@ export default function PetProfilePage({
       setFormError("生日不能晚于今天。");
       return;
     }
+    if (creating && shared && !shared.authorize("pet", "profile")) return;
     setBusy(true);
     setFormError("");
     setNotice("");
@@ -165,6 +216,9 @@ export default function PetProfilePage({
           ? [...current, saved]
           : current.map((pet) => (pet.id === saved.id ? saved : pet)),
       );
+      shared?.publishPet(saved, creating);
+      if (creating) shared?.finishCreate();
+      setEditingProfile(false);
       setSelectedId(saved.id);
       setForm(formFromPet(saved));
       setCreating(false);
@@ -182,16 +236,18 @@ export default function PetProfilePage({
       !window.confirm(`确定删除「${selectedPet.name}」的资料吗？`)
     )
       return;
+    if (shared && !shared.authorize("pet", "profile")) return;
     setBusy(true);
     setFormError("");
     setNotice("");
     try {
       await petClient.remove(selectedPet.id);
       const remaining = pets.filter((pet) => pet.id !== selectedPet.id);
+      shared?.removePet(selectedPet.id);
       setPets(remaining);
       setSelectedId(remaining[0]?.id ?? null);
       setForm(remaining[0] ? formFromPet(remaining[0]) : { ...emptyForm });
-      setCreating(remaining.length === 0);
+      setCreating(!shared && remaining.length === 0);
       setNotice("宠物资料已删除。");
     } catch (error) {
       setFormError(errorMessage(error));
@@ -207,6 +263,10 @@ export default function PetProfilePage({
         navigationDisabled={busy}
         onNavigate={(page) => {
           if (page === "pets") return;
+          if (shared) {
+            onNavigate(page);
+            return;
+          }
           if (canLeaveForm()) {
             setForm(selectedPet ? formFromPet(selectedPet) : { ...emptyForm });
             setFormError("");
@@ -223,7 +283,12 @@ export default function PetProfilePage({
               <span aria-hidden="true">✳</span> &nbsp; PET PROFILE
             </p>
             <h1>
-              给它一份专属档案<span className="heading-dot">.</span>
+              {shared
+                ? creating
+                  ? "新增宠物档案"
+                  : "宠物档案"
+                : "给它一份专属档案"}
+              <span className="heading-dot">.</span>
             </h1>
             <p className="subtitle">记下关于它的小细节，让每一次陪伴更贴心。</p>
           </div>
@@ -232,6 +297,7 @@ export default function PetProfilePage({
           </span>
         </div>
 
+        {!creating && <PetSwitcher label="正在查看的宠物" disabled={busy} />}
         <div
           className={`mode-banner ${usingDemoData ? "demo" : "connected"}`}
           role="status"
@@ -259,80 +325,91 @@ export default function PetProfilePage({
             <p>{loadError}</p>
             <button
               className="button secondary"
-              onClick={() => setReloadKey((value) => value + 1)}
+              onClick={() =>
+                shared
+                  ? shared.reloadPets()
+                  : setReloadKey((value) => value + 1)
+              }
             >
               重新加载
             </button>
           </section>
         ) : (
-          <div className="workspace">
-            <aside className="pet-list-panel" aria-label="宠物列表">
-              <div className="panel-title">
-                <div>
-                  <span className="section-kicker">MY COMPANIONS</span>
-                  <h2>
-                    我的伙伴 <span>{pets.length}</span>
-                  </h2>
-                </div>
-              </div>
-              {pets.length === 0 ? (
-                <div className="empty-list">
-                  <span className="empty-icon" aria-hidden="true">
-                    ♡
-                  </span>
-                  <strong>还没有宠物档案</strong>
-                  <p>从第一份资料开始，记录你们的故事。</p>
-                </div>
-              ) : (
-                <div className="pet-list">
-                  {pets.map((pet, index) => (
-                    <button
-                      key={pet.id}
-                      type="button"
-                      className={`pet-card ${!creating && selectedId === pet.id ? "active" : ""}`}
-                      onClick={() => choosePet(pet)}
-                      disabled={busy}
-                      aria-pressed={!creating && selectedId === pet.id}
-                    >
-                      <span
-                        className={`pet-avatar avatar-${index % 3}`}
-                        aria-hidden="true"
-                      >
-                        {pet.species === "cat"
-                          ? "猫"
-                          : pet.species === "dog"
-                            ? "犬"
-                            : "宠"}
+          <div className={`workspace ${shared ? "single-profile" : ""}`}>
+            {!shared && (
+              <>
+                <aside className="pet-list-panel" aria-label="宠物列表">
+                  <div className="panel-title">
+                    <div>
+                      <span className="section-kicker">MY COMPANIONS</span>
+                      <h2>
+                        我的伙伴 <span>{pets.length}</span>
+                      </h2>
+                    </div>
+                  </div>
+                  {pets.length === 0 ? (
+                    <div className="empty-list">
+                      <span className="empty-icon" aria-hidden="true">
+                        ♡
                       </span>
-                      <span className="pet-card-text">
-                        <strong>{pet.name}</strong>
-                        <small>
-                          {speciesLabel(pet)}
-                          {pet.breed ? ` · ${pet.breed}` : ""}
-                        </small>
-                      </span>
-                      <span className="pet-arrow" aria-hidden="true">
-                        ↗
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                className="add-pet"
-                onClick={startCreate}
-                disabled={busy}
-              >
-                <span aria-hidden="true">＋</span> 添加新伙伴
-              </button>
-              <p className="panel-note">
-                <span aria-hidden="true">✿</span> &nbsp;
-                每个小家伙都值得被认真了解。
-              </p>
-            </aside>
+                      <strong>还没有宠物档案</strong>
+                      <p>从第一份资料开始，记录你们的故事。</p>
+                    </div>
+                  ) : (
+                    <div className="pet-list">
+                      {pets.map((pet, index) => (
+                        <button
+                          key={pet.id}
+                          type="button"
+                          className={`pet-card ${!creating && selectedId === pet.id ? "active" : ""}`}
+                          onClick={() => choosePet(pet)}
+                          disabled={busy}
+                          aria-pressed={!creating && selectedId === pet.id}
+                        >
+                          <span
+                            className={`pet-avatar avatar-${index % 3}`}
+                            aria-hidden="true"
+                          >
+                            {pet.species === "cat"
+                              ? "猫"
+                              : pet.species === "dog"
+                                ? "犬"
+                                : "宠"}
+                          </span>
+                          <span className="pet-card-text">
+                            <strong>{pet.name}</strong>
+                            <small>
+                              {speciesLabel(pet)}
+                              {pet.breed ? ` · ${pet.breed}` : ""}
+                            </small>
+                          </span>
+                          <span className="pet-arrow" aria-hidden="true">
+                            ↗
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="add-pet"
+                    onClick={startCreate}
+                    disabled={busy}
+                  >
+                    <span aria-hidden="true">＋</span> 添加新伙伴
+                  </button>
+                  <p className="panel-note">
+                    <span aria-hidden="true">✿</span> &nbsp;
+                    每个小家伙都值得被认真了解。
+                  </p>
+                </aside>
+              </>
+            )}
 
-            <section className="form-panel" aria-labelledby="form-title">
+            <section
+              className={`form-panel ${shared && !creating && !editingProfile ? "profile-readonly" : ""}`}
+              aria-labelledby="form-title"
+            >
               <div className="form-heading">
                 <div>
                   <span className="section-kicker">THE LITTLE DETAILS</span>
@@ -361,142 +438,223 @@ export default function PetProfilePage({
                 </div>
               )}
 
-              <form onSubmit={handleSubmit}>
-                <fieldset className="field-grid" disabled={busy}>
-                  <label className="field">
-                    <span>
-                      宠物名字 <em>*</em>
+              {shared && !selectedPet && !creating ? (
+                <div className="profile-empty">
+                  <h2>请先选择一只宠物</h2>
+                  <p>
+                    未关联模式没有宠物档案，可在上方选择已有宠物，或创建新档案。
+                  </p>
+                  <button className="button primary" onClick={shared.createPet}>
+                    新增宠物
+                  </button>
+                </div>
+              ) : shared && !creating && !editingProfile && selectedPet ? (
+                <div className="profile-detail">
+                  <div className="profile-detail-heading">
+                    <span className="pet-initial">
+                      {selectedPet.name.slice(0, 1)}
                     </span>
-                    <input
-                      autoComplete="off"
-                      maxLength={50}
-                      required
-                      placeholder="例如：豆豆"
-                      value={form.name}
-                      onChange={(event) =>
-                        setForm({ ...form, name: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    <span>
-                      宠物类型 <em>*</em>
-                    </span>
-                    <select
-                      value={form.species}
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          species: event.target.value as PetSpecies,
-                          other_species:
-                            event.target.value === "other"
-                              ? form.other_species
-                              : "",
-                        })
-                      }
+                    <div>
+                      <h2>{selectedPet.name}</h2>
+                      <p>
+                        {speciesLabel(selectedPet)}
+                        {selectedPet.breed ? ` · ${selectedPet.breed}` : ""}
+                      </p>
+                    </div>
+                    <button
+                      className="button secondary"
+                      onClick={() => setEditingProfile(true)}
                     >
-                      <option value="dog">狗狗</option>
-                      <option value="cat">猫咪</option>
-                      <option value="other">其他</option>
-                    </select>
-                  </label>
-                  {form.species === "other" && (
-                    <label className="field field-wide">
-                      <span>
-                        具体物种 <small>选填</small>
-                      </span>
-                      <input
-                        autoComplete="off"
-                        placeholder="例如：兔、仓鼠、鹦鹉"
-                        aria-describedby="other-species-hint"
-                        value={form.other_species}
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            other_species: event.target.value,
-                          })
-                        }
-                      />
-                      <small className="field-hint" id="other-species-hint">
-                        可留空，最多填写 50 个字符。
-                      </small>
-                    </label>
-                  )}
-                  <label className="field">
-                    <span>
-                      品种 <small>选填</small>
-                    </span>
-                    <input
-                      maxLength={100}
-                      placeholder="例如：金毛"
-                      value={form.breed}
-                      onChange={(event) =>
-                        setForm({ ...form, breed: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    <span>
-                      生日 <small>选填</small>
-                    </span>
-                    <input
-                      type="date"
-                      max={localToday()}
-                      value={form.birthday}
-                      onChange={(event) =>
-                        setForm({ ...form, birthday: event.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="field field-wide">
-                    <span>
-                      健康与生活备注 <small>选填</small>
-                    </span>
-                    <textarea
-                      rows={5}
-                      maxLength={2000}
-                      placeholder="过敏情况、饮食习惯，或你想记住的任何事情…"
-                      value={form.notes}
-                      onChange={(event) =>
-                        setForm({ ...form, notes: event.target.value })
-                      }
-                    />
-                    <small className="field-hint">
-                      这些细节会帮助你更好地照顾它。
-                    </small>
-                  </label>
-                </fieldset>
-                <div className="form-actions">
+                      编辑资料
+                    </button>
+                  </div>
+                  <dl>
+                    {[
+                      ["名字", selectedPet.name],
+                      ["宠物类型", speciesLabel(selectedPet)],
+                      ["品种", selectedPet.breed],
+                      ["生日", selectedPet.birthday],
+                      ["健康与生活备注", selectedPet.notes],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>{value || "未填写"}</dd>
+                      </div>
+                    ))}
+                  </dl>
                   <button
-                    className="button primary"
-                    type="submit"
+                    className="button delete"
+                    onClick={handleDelete}
                     disabled={busy}
                   >
-                    {busy ? "处理中…" : creating ? "创建档案" : "保存修改"}{" "}
-                    <span aria-hidden="true">↗</span>
+                    删除档案
                   </button>
-                  {!creating && (
-                    <button
-                      className="button delete"
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={busy}
-                    >
-                      删除档案
-                    </button>
-                  )}
-                  {creating && pets.length > 0 && (
-                    <button
-                      className="button text-button"
-                      type="button"
-                      onClick={() => choosePet(pets[0])}
-                      disabled={busy}
-                    >
-                      取消
-                    </button>
-                  )}
                 </div>
-              </form>
+              ) : (
+                <>
+                  <form onSubmit={handleSubmit}>
+                    <fieldset className="field-grid" disabled={busy}>
+                      <label className="field">
+                        <span>
+                          宠物名字 <em>*</em>
+                        </span>
+                        <input
+                          autoComplete="off"
+                          maxLength={50}
+                          required
+                          placeholder="例如：豆豆"
+                          value={form.name}
+                          onChange={(event) =>
+                            setForm({ ...form, name: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>
+                          宠物类型 <em>*</em>
+                        </span>
+                        <select
+                          value={form.species}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              species: event.target.value as PetSpecies,
+                              other_species:
+                                event.target.value === "other"
+                                  ? form.other_species
+                                  : "",
+                            })
+                          }
+                        >
+                          <option value="dog">狗狗</option>
+                          <option value="cat">猫咪</option>
+                          <option value="other">其他</option>
+                        </select>
+                      </label>
+                      {form.species === "other" && (
+                        <label className="field field-wide">
+                          <span>
+                            具体物种 <small>选填</small>
+                          </span>
+                          <input
+                            autoComplete="off"
+                            placeholder="例如：兔、仓鼠、鹦鹉"
+                            aria-describedby="other-species-hint"
+                            value={form.other_species}
+                            onChange={(event) =>
+                              setForm({
+                                ...form,
+                                other_species: event.target.value,
+                              })
+                            }
+                          />
+                          <small className="field-hint" id="other-species-hint">
+                            可留空，最多填写 50 个字符。
+                          </small>
+                        </label>
+                      )}
+                      <label className="field">
+                        <span>
+                          品种 <small>选填</small>
+                        </span>
+                        <input
+                          maxLength={100}
+                          placeholder="例如：金毛"
+                          value={form.breed}
+                          onChange={(event) =>
+                            setForm({ ...form, breed: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="field">
+                        <span>
+                          生日 <small>选填</small>
+                        </span>
+                        <input
+                          type="date"
+                          max={localToday()}
+                          value={form.birthday}
+                          onChange={(event) =>
+                            setForm({ ...form, birthday: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="field field-wide">
+                        <span>
+                          健康与生活备注 <small>选填</small>
+                        </span>
+                        <textarea
+                          rows={5}
+                          maxLength={2000}
+                          placeholder="过敏情况、饮食习惯，或你想记住的任何事情…"
+                          value={form.notes}
+                          onChange={(event) =>
+                            setForm({ ...form, notes: event.target.value })
+                          }
+                        />
+                        <small className="field-hint">
+                          这些细节会帮助你更好地照顾它。
+                        </small>
+                      </label>
+                    </fieldset>
+                    <div className="form-actions">
+                      <button
+                        className="button primary"
+                        type="submit"
+                        disabled={busy}
+                      >
+                        {busy ? "处理中…" : creating ? "创建档案" : "保存修改"}{" "}
+                        <span aria-hidden="true">↗</span>
+                      </button>
+                      {!creating && (
+                        <button
+                          className="button delete"
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={busy}
+                        >
+                          删除档案
+                        </button>
+                      )}
+                      {creating && pets.length > 0 && (
+                        <button
+                          className="button text-button"
+                          type="button"
+                          onClick={() => {
+                            if (shared) {
+                              if (canLeaveForm()) {
+                                shared.finishCreate();
+                                onNavigate("mine");
+                              }
+                            } else choosePet(pets[0]);
+                          }}
+                          disabled={busy}
+                        >
+                          取消
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                  {shared && editingProfile && (
+                    <button
+                      className="button secondary"
+                      onClick={() => {
+                        if (canLeaveForm()) {
+                          setForm(
+                            selectedPet
+                              ? formFromPet(selectedPet)
+                              : { ...emptyForm },
+                          );
+                          setEditingProfile(false);
+                          setFormError("");
+                        }
+                      }}
+                    >
+                      取消编辑
+                    </button>
+                  )}
+                </>
+              )}
             </section>
           </div>
         )}

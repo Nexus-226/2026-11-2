@@ -1,25 +1,40 @@
 import RecordsPage from "../pages/RecordsPage";
 import RemindersPage from "../pages/RemindersPage";
 import NearbyPage from "../pages/NearbyPage";
-import { useState } from "react";
-import type { AppPage } from "../components/common/AppHeader";
 import ChatPage from "../pages/ChatPage";
 import PetProfilePage from "../pages/PetProfilePage";
-
-export default function App() {
-  const [page, setPage] = useState<AppPage>("chat");
-
+import MyPage from "../pages/MyPage";
+import LostPetPage from "../pages/LostPetPage";
+import AppHeader, { AppBottomNav } from "../components/common/AppHeader";
+import { AppScopeProvider, useAppScope } from "./AppScope";
+import "../styles/mobile-shell.css";
+function AppContent() {
+  const shared = useAppScope()!;
+  const { page, navigate } = shared;
   return (
-    <>
+    <div className="app-layout">
+      <AppHeader active={page} onNavigate={navigate} shell />
+      {shared.notice && (
+        <div className="app-notice" role="status">
+          {shared.notice}
+        </div>
+      )}
       <div hidden={page !== "chat"}>
-        <ChatPage active={page === "chat"} onNavigate={setPage} />
+        <ChatPage active={page === "chat"} onNavigate={navigate} />
       </div>
-      {page === "records" && <RecordsPage onNavigate={setPage} />}
-      {page === "reminders" && <RemindersPage onNavigate={setPage} />}
-      {page === "nearby" && <NearbyPage onNavigate={setPage} />}
-      <div hidden={page !== "pets"}>
-        <PetProfilePage onNavigate={setPage} />
-      </div>
-    </>
+      {page === "records" && <RecordsPage onNavigate={navigate} />}{" "}
+      {page === "reminders" && <RemindersPage onNavigate={navigate} />}{" "}
+      {page === "nearby" && <NearbyPage onNavigate={navigate} />}{" "}
+      {page === "pets" && <PetProfilePage onNavigate={navigate} />}{" "}
+      {page === "mine" && <MyPage />} {page === "lost" && <LostPetPage />}
+      <AppBottomNav />
+    </div>
+  );
+}
+export default function App() {
+  return (
+    <AppScopeProvider>
+      <AppContent />
+    </AppScopeProvider>
   );
 }
