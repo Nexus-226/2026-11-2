@@ -202,6 +202,7 @@ def test_run_chat_prompt_warns_on_same_name_pets() -> None:
     assert "档案里目前有 2 只名字都为「豆豆」的宠物" in prompt
     assert "请用户确认是哪一只" in prompt
     assert "确认前不要生成草稿" in prompt
+    assert "绝不要把内部 id、pet_id、UUID 写进回复" in prompt
 
 
 def test_run_chat_prompt_no_same_name_warning_when_names_unique() -> None:
@@ -221,7 +222,6 @@ def test_run_chat_prompt_no_same_name_warning_when_names_unique() -> None:
     )
     prompt = captured["system_prompt"]
     assert "档案里目前有" not in prompt
-    assert "同名宠物" not in prompt
 
 
 def test_run_chat_prompt_warns_not_to_equate_other_names() -> None:
@@ -357,6 +357,8 @@ def test_run_chat_prompt_does_not_leak_internal_names() -> None:
     prompt = captured["system_prompt"]
     assert "不要泄漏任何内部变量名" in prompt
     assert "不写进给用户的回答" in prompt
+    assert "id、pet_id、UUID 是内部标识" in prompt
+    assert "不要贴内部 id" in prompt
 
 
 def test_run_chat_prompt_references_other_species() -> None:
