@@ -94,6 +94,18 @@ def _associated_pet_species(pet: PetRead) -> str:
     return pet.species
 
 
+def _pet_profile_text(pet: PetRead) -> str:
+    """把关联宠物档案拼成自然语言事实依据（不用内部字段名）。"""
+    parts = [f"名字「{pet.name}」", f"物种 {_associated_pet_species(pet)}"]
+    if pet.breed:
+        parts.append(f"品种 {pet.breed}")
+    if pet.birthday:
+        parts.append(f"生日 {pet.birthday.isoformat()}")
+    if pet.notes:
+        parts.append(f"备注：{pet.notes}")
+    return "；".join(parts)
+
+
 def run_chat(
     message: str,
     pet_id: UUID | None,
@@ -132,15 +144,14 @@ def run_chat(
     if pet_id is not None:
         associated_pet = service.get_pet(pet_id)
         if associated_pet is not None:
-            species = _associated_pet_species(associated_pet)
             system += (
-                f" 当前关联宠物：名字「{associated_pet.name}」，"
-                f"species={species}，pet_id={pet_id}。"
-                f"当用户提到这只宠物的名字「{associated_pet.name}」，"
-                "或“它/这只宠物/当前宠物”时，优先按这只关联宠物理解并回答；"
-                "用户提到的是其他名字时，不要自动当成这只关联宠物，也不要未查询就断言"
-                "档案里没有该名字：先调用 list_pets 核对是否有这只宠物，"
-                "列表里确实没有时再如实说明没有。需要档案详情时调用 get_pet_profile 查询。"
+                f" 当前关联宠物档案（已读取，以下为事实依据，回答以它为准）："
+                f"{_pet_profile_text(associated_pet)}。pet_id={pet_id}。"
+                f"当用户提到「{associated_pet.name}」或“它/这只宠物/当前宠物”时，优先按这只关联宠物理解并回答；"
+                "用户提到其他名字时，不要自动当成这只关联宠物，先调用 list_pets 核对，"
+                "列表里确实没有才说没有。"
+                "回答涉及备注/过敏/饮食/健康/体重/生日等具体事实时，只用上面档案里的内容，"
+                "档案里没有的就如实说“档案未记录”，不要用常识或用户描述替代或补造事实。"
             )
         else:
             system += f" 当前关联宠物 pet_id={pet_id}。"
