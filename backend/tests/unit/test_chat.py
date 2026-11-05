@@ -219,6 +219,28 @@ def test_run_chat_prompt_labels_other_species_pet() -> None:
     assert "具体物种：兔" in captured["system_prompt"]
 
 
+def test_run_chat_prompt_explains_derived_business_status() -> None:
+    captured: dict[str, str] = {}
+
+    class CapturingProvider:
+        def next_turn(self, **kwargs: object) -> ProviderTurn:
+            captured["system_prompt"] = str(kwargs["system_prompt"])
+            return ProviderTurn(reply="ok")
+
+    run_chat(
+        "附近有现在营业的宠物医院吗？",
+        None,
+        FakePetService([]),
+        provider=CapturingProvider(),
+    )
+    prompt = captured["system_prompt"]
+    assert "business_hours_today" in prompt
+    assert "按今日营业时间推算" in prompt
+    assert "不是实时开关门探测" in prompt
+    assert "演示固定值" in prompt
+    assert "不要给出开关门结论" in prompt
+
+
 def test_run_chat_prompt_labels_other_species_empty() -> None:
     captured: dict[str, str] = {}
 

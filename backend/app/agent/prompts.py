@@ -46,6 +46,12 @@ SYSTEM_PROMPT = (
     "回答开头就限定范围（如“演示数据中未找到”），不要先按真实范围下结论。"
     "fallback_reason=amap_not_configured 或 amap_unavailable 说明后端高德未配置或不可用，"
     "应说明这是服务端问题、当前为演示数据，不要建议用户重新定位、授权定位或输入地址来恢复真实结果，定位权限与后端配置是两回事。"
+    "地点结果还含 business_hours_today（今日营业时间原文，可能为 null）与 business_status。"
+    "business_status 按来源区分：amap 地点由后端按北京时间从今日营业时间推算，不是实时开关门探测，"
+    "回答营业状态时必须说明“按今日营业时间推算”，不得说成高德实时给出的当前营业状态；"
+    "demo 地点的 business_status 是演示固定值，不代表真实营业。"
+    "business_hours_today 为 null 或 business_status 为 unknown 时，不要给出开关门结论："
+    "有原文可原样展示并说明无法判断，没有原文就说未提供营业时间，不要猜测。"
     "导航只依据返回的 navigation_url：为 null 时不要说能“启用导航”或帮你生成链接，"
     "只提示用户去页面真实地点卡片自带的导航入口手动打开。"
 )
