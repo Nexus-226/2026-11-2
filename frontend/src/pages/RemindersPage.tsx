@@ -1,4 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useAppScope, useAppGuard } from "../app/AppScope";
+import PetSwitcher from "../components/navigation/PetSwitcher";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import { petClient, usingDemoData } from "../api/pets";
 import { recordClient, usingDemoRecords } from "../api/records";
@@ -30,10 +32,17 @@ export default function RemindersPage({
 }: {
   onNavigate: (page: AppPage) => void;
 }) {
+  const shared = useAppScope();
   const [pets, setPets] = useState<Pet[]>([]),
-    [scope, setScope] = useState("unlinked"),
-    [items, setItems] = useState<PetReminder[]>([]),
-    [records, setRecords] = useState<PetRecord[]>([]);
+    [localScope, setScope] = useState("unlinked"),
+    [allItems, setItems] = useState<PetReminder[]>([]),
+    [allRecords, setRecords] = useState<PetRecord[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const formRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (formOpen)
+      formRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [formOpen]);
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
@@ -47,9 +56,19 @@ export default function RemindersPage({
     [dueOn, setDueOn] = useState(shanghaiToday),
     [sourceRecordId, setSourceRecordId] = useState("");
   const mismatch = !usingDemoReminders && usingDemoData;
+  const scope = shared
+    ? mismatch
+      ? "unlinked"
+      : shared.petId || "unlinked"
+    : localScope;
   const recordsMismatch = !usingDemoReminders && usingDemoRecords;
 
   useEffect(() => {
+    if (shared) {
+      setPets(shared.pets);
+      setPetError(shared.error);
+      return;
+    }
     let live = true;
     petClient
       .list()
@@ -65,7 +84,7 @@ export default function RemindersPage({
     return () => {
       live = false;
     };
-  }, [reload]);
+  }, [reload, shared?.pets, shared?.error]);
 
   useEffect(() => {
     let live = true;
@@ -105,7 +124,14 @@ export default function RemindersPage({
     };
   }, [scope, reload]);
 
+  const items = allItems.filter(
+    (item) => item.pet_id === (scope === "unlinked" ? null : scope),
+  );
+  const records = allRecords.filter(
+    (item) => item.pet_id === (scope === "unlinked" ? null : scope),
+  );
   function reset() {
+    setFormOpen(false);
     setEditing(null);
     setTitle("");
     setDueOn(shanghaiToday());
@@ -113,7 +139,20 @@ export default function RemindersPage({
     setFormError("");
   }
 
+  const dirty = editing
+    ? title !== editing.title ||
+      dueOn !== editing.due_on ||
+      sourceRecordId !== (editing.source_record_id || "")
+    : !!title || dueOn !== shanghaiToday() || !!sourceRecordId;
+  useAppGuard("reminders", {
+    busy,
+    warning: () => (dirty ? "待办修改尚未保存，继续将丢弃草稿。" : null),
+    onPetChange: reset,
+    onLeave: reset,
+  });
   function startEdit(item: PetReminder) {
+    if (dirty && !window.confirm("放弃当前草稿并编辑这条待办？")) return;
+    setFormOpen(true);
     setEditing(item);
     setTitle(item.title);
     setDueOn(item.due_on);
@@ -222,12 +261,17 @@ export default function RemindersPage({
             <h1>
               待办提醒<span className="heading-dot">.</span>
             </h1>
-            <p className="subtitle">计划要做的护理事项，到期前提醒你。</p>
+            <p className="subtitle">按到期日期管理站内待办。</p>
           </div>
           <span className="heading-illustration" aria-hidden="true">
             ♡<span>✦</span>
           </span>
         </header>
+        <PetSwitcher
+          label="当前查看范围"
+          disabled={busy || mismatch}
+          unlinked={mismatch}
+        />
         <div
           className={`mode-banner ${usingDemoReminders ? "demo" : "connected"}`}
           role="status"
@@ -256,33 +300,70 @@ export default function RemindersPage({
             <button onClick={() => setReload((v) => v + 1)}>重试</button>
           </p>
         )}
-        <section className="reminders-filters" aria-label="提醒范围">
-          <label>
-            宠物范围
-            <select
+        {shared && (
+          <div className="care-section-heading">
+            <div>
+              <span className="section-kicker">A LITTLE REMINDER</span>
+              <h2>重要的小事，不再忘记</h2>
+            </div>
+            <button
+              className="button primary"
               disabled={busy}
-              value={scope}
-              onChange={(e) => {
-                setScope(e.target.value);
-                reset();
-                setNotice("");
+              onClick={() => {
+                if (!dirty || window.confirm("放弃当前草稿并创建新待办？")) {
+                  reset();
+                  setFormOpen(true);
+                }
               }}
             >
-              <option value="unlinked">未关联宠物</option>
-              {!mismatch &&
-                pets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </select>
-          </label>
+              ＋ 创建待办
+            </button>
+          </div>
+        )}
+        <section className="reminders-filters" aria-label="提醒范围">
+          {!shared && (
+            <>
+              <label>
+                宠物范围
+                <select
+                  disabled={busy}
+                  value={scope}
+                  onChange={(e) => {
+                    setScope(e.target.value);
+                    reset();
+                    setNotice("");
+                  }}
+                >
+                  <option value="unlinked">未关联宠物</option>
+                  {!mismatch &&
+                    pets.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </>
+          )}
           <button disabled={busy} onClick={() => setReload((v) => v + 1)}>
             刷新提醒
           </button>
         </section>
+        {shared && notice && (
+          <div className="notice success" role="status">
+            {notice}
+          </div>
+        )}
+        {shared && formError && (
+          <div className="notice error" role="alert">
+            {formError}
+          </div>
+        )}
         <div className="reminders-layout">
-          <section className="form-panel">
+          <section
+            ref={formRef}
+            className={`form-panel ${shared ? "care-form" : ""} ${formOpen ? "is-open" : ""}`}
+          >
             <div className="form-heading">
               <div>
                 <span className="section-kicker">ADD REMINDER</span>
@@ -298,15 +379,28 @@ export default function RemindersPage({
                 ✽
               </span>
             </div>
-            {notice && (
+            {!shared && notice && (
               <div className="notice success" role="status">
                 {notice}
               </div>
             )}
-            {formError && (
+            {!shared && formError && (
               <div className="notice error" role="alert">
                 {formError}
               </div>
+            )}
+            {shared && (
+              <button
+                className="close-care-form"
+                disabled={busy}
+                onClick={() => {
+                  if (!dirty || window.confirm("放弃未保存的待办内容？"))
+                    reset();
+                }}
+                aria-label="关闭待办表单"
+              >
+                ×
+              </button>
             )}
             <form onSubmit={save}>
               <fieldset className="field-grid" disabled={busy}>

@@ -1,3 +1,5 @@
+import { useAppScope, useAppGuard } from "../app/AppScope";
+import PetSwitcher from "../components/navigation/PetSwitcher";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { chatClient, usingDemoChat } from "../api/chat";
 import { petClient, usingDemoData } from "../api/pets";
@@ -24,10 +26,11 @@ function messageFromError(error: unknown): string {
 }
 
 export default function ChatPage({ active, onNavigate }: ChatPageProps) {
+  const shared = useAppScope();
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [selectedPetId, setSelectedPetId] = useState("");
+  const [localSelectedPetId, setSelectedPetId] = useState("");
   const selectedPetIdRef = useRef("");
   const [pets, setPets] = useState<Pet[]>([]);
   const [petsLoading, setPetsLoading] = useState(false);
@@ -41,9 +44,33 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
   const nextMessageKey = useRef(0);
   const endRef = useRef<HTMLLIElement | null>(null);
   const canSelectPets = usingDemoChat || !usingDemoData;
+  const selectedPetId = shared
+    ? canSelectPets
+      ? shared.petId || ""
+      : ""
+    : localSelectedPetId;
+  useAppGuard("chat", {
+    busy,
+    warning: (kind) =>
+      kind === "pet" && messages.length
+        ? "切换宠物会开始新对话，当前页面聊天记录将清空。"
+        : active && draft
+          ? "问题尚未发送，继续将丢弃输入。"
+          : null,
+    onPetChange: () => resetSession("关联宠物已变更，已开始新对话。"),
+    onLeave: () => {
+      if (active) setDraft("");
+    },
+  });
 
   useEffect(() => {
     if (!active) return;
+    if (shared) {
+      setPets(canSelectPets ? shared.pets : []);
+      setPetsLoading(shared.loading);
+      setPetsError(shared.error);
+      return;
+    }
     if (!canSelectPets) {
       clearInvalidPet();
       setPets([]);
@@ -75,7 +102,14 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
     return () => {
       current = false;
     };
-  }, [active, canSelectPets, petReloadKey]);
+  }, [
+    active,
+    canSelectPets,
+    petReloadKey,
+    shared?.pets,
+    shared?.loading,
+    shared?.error,
+  ]);
 
   useEffect(() => {
     if (active && messages.length > 0) {
@@ -229,6 +263,11 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
           </span>
         </div>
 
+        <PetSwitcher
+          label="本次对话关联"
+          disabled={busy || !canSelectPets}
+          unlinked={!canSelectPets}
+        />
         <div
           className={`mode-banner ${usingDemoChat ? "demo" : "connected"}`}
           role="status"
@@ -267,29 +306,33 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
             </button>
           </div>
 
-          <div className="context-row">
-            <label htmlFor="chat-pet">关联宠物</label>
-            <select
-              id="chat-pet"
-              value={selectedPetId}
-              disabled={busy || petsLoading || !canSelectPets}
-              onChange={(event) => changePet(event.target.value)}
-            >
-              <option value="">暂不关联宠物</option>
-              {pets.map((pet) => (
-                <option key={pet.id} value={pet.id}>
-                  {pet.name}
-                </option>
-              ))}
-            </select>
-            <span className="context-hint">
-              {petsLoading
-                ? "正在加载档案…"
-                : pets.length
-                  ? "可选，发送时带上档案"
-                  : "可以不关联，直接提问"}
-            </span>
-          </div>
+          {!shared && (
+            <>
+              <div className="context-row">
+                <label htmlFor="chat-pet">关联宠物</label>
+                <select
+                  id="chat-pet"
+                  value={selectedPetId}
+                  disabled={busy || petsLoading || !canSelectPets}
+                  onChange={(event) => changePet(event.target.value)}
+                >
+                  <option value="">暂不关联宠物</option>
+                  {pets.map((pet) => (
+                    <option key={pet.id} value={pet.id}>
+                      {pet.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="context-hint">
+                  {petsLoading
+                    ? "正在加载档案…"
+                    : pets.length
+                      ? "可选，发送时带上档案"
+                      : "可以不关联，直接提问"}
+                </span>
+              </div>
+            </>
+          )}
           {!canSelectPets && (
             <div className="context-message" role="status">
               真实对话不能使用本地演示档案。可以先不关联宠物，或切换到后端档案。
@@ -302,7 +345,11 @@ export default function ChatPage({ active, onNavigate }: ChatPageProps) {
               </span>
               <button
                 type="button"
-                onClick={() => setPetReloadKey((value) => value + 1)}
+                onClick={() =>
+                  shared
+                    ? shared.reloadPets()
+                    : setPetReloadKey((value) => value + 1)
+                }
               >
                 重试加载
               </button>

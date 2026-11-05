@@ -1,4 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import AppIcon from "../components/navigation/AppIcon";
+import { useAppScope, useAppGuard } from "../app/AppScope";
+import PetSwitcher from "../components/navigation/PetSwitcher";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import { petClient, usingDemoData } from "../api/pets";
 import { recordClient, usingDemoRecords } from "../api/records";
@@ -23,8 +26,9 @@ export default function RecordsPage({
 }: {
   onNavigate: (page: AppPage) => void;
 }) {
+  const shared = useAppScope();
   const [pets, setPets] = useState<Pet[]>([]),
-    [scope, setScope] = useState("unlinked"),
+    [localScope, setScope] = useState("unlinked"),
     [items, setItems] = useState<PetRecord[]>([]);
   const [kind, setKind] = useState(""),
     [from, setFrom] = useState(""),
@@ -42,9 +46,25 @@ export default function RecordsPage({
     [name, setName] = useState(""),
     [weight, setWeight] = useState(""),
     [notes, setNotes] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const formRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (formOpen)
+      formRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [formOpen]);
   const [trendRange, setTrendRange] = useState("90");
   const mismatch = !usingDemoRecords && usingDemoData;
+  const scope = shared
+    ? mismatch
+      ? "unlinked"
+      : shared.petId || "unlinked"
+    : localScope;
   useEffect(() => {
+    if (shared) {
+      setPets(shared.pets);
+      setPetError(shared.error);
+      return;
+    }
     let live = true;
     petClient
       .list()
@@ -60,7 +80,7 @@ export default function RecordsPage({
     return () => {
       live = false;
     };
-  }, [reload]);
+  }, [reload, shared?.pets, shared?.error]);
   useEffect(() => {
     let live = true;
     setItems([]);
@@ -92,6 +112,7 @@ export default function RecordsPage({
     };
   }, [scope, kind, from, to, reload]);
   function reset() {
+    setFormOpen(false);
     setEditing(null);
     setType("deworming");
     setDate(shanghaiToday());
@@ -100,6 +121,26 @@ export default function RecordsPage({
     setNotes("");
     setFormError("");
   }
+  const currentItems = items.filter(
+    (item) => item.pet_id === (scope === "unlinked" ? null : scope),
+  );
+  const dirty = editing
+    ? type !== editing.record_type ||
+      date !== editing.occurred_on ||
+      name !== (editing.name || "") ||
+      weight !== (editing.weight_kg?.toString() || "") ||
+      notes !== (editing.notes || "")
+    : type !== "deworming" ||
+      date !== shanghaiToday() ||
+      !!name ||
+      !!weight ||
+      !!notes;
+  useAppGuard("records", {
+    busy,
+    warning: () => (dirty ? "记录修改尚未保存，继续将丢弃草稿。" : null),
+    onPetChange: reset,
+    onLeave: reset,
+  });
   async function save(e: FormEvent) {
     e.preventDefault();
     setFormError("");
@@ -176,6 +217,11 @@ export default function RecordsPage({
             ♡<span>✦</span>
           </span>
         </header>
+        <PetSwitcher
+          label="当前查看范围"
+          disabled={busy || mismatch}
+          unlinked={mismatch}
+        />
         <div
           className={`mode-banner ${usingDemoRecords ? "demo" : "connected"}`}
           role="status"
@@ -204,88 +250,136 @@ export default function RecordsPage({
             <button onClick={() => setReload((v) => v + 1)}>重试</button>
           </p>
         )}
-        <section className="records-filters" aria-label="记录筛选">
-          <label>
-            宠物范围
-            <select
-              disabled={busy}
-              value={scope}
-              onChange={(e) => {
-                setScope(e.target.value);
-                reset();
-                setNotice("");
-              }}
-            >
-              <option value="unlinked">未关联宠物</option>
-              {!mismatch &&
-                pets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
+        {shared && (
+          <section className="care-category-section" aria-label="记录分类">
+            <div className="care-section-heading">
+              <div>
+                <span className="section-kicker">CARE JOURNAL</span>
+                <h2>每一份照顾，都有记录</h2>
+              </div>
+              <button
+                className="button primary"
+                disabled={busy}
+                onClick={() => {
+                  if (!dirty || window.confirm("放弃当前草稿并添加新记录？")) {
+                    reset();
+                    setType(kind ? (kind as RecordType) : "deworming");
+                    setFormOpen(true);
+                  }
+                }}
+              >
+                ＋ 添加记录
+              </button>
+            </div>
+            <div className="record-kind-cards">
+              {Object.entries(labels).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={kind === id}
+                  disabled={busy}
+                  onClick={() => setKind(kind === id ? "" : id)}
+                >
+                  <AppIcon
+                    name={id as "vaccine" | "deworming" | "bath" | "weight"}
+                  />
+                  <strong>{label}</strong>
+                  <small>查看记录</small>
+                </button>
+              ))}
+            </div>
+            <div className="category-hint">
+              <span>点击类别筛选记录</span>
+              <button disabled={busy || !kind} onClick={() => setKind("")}>
+                查看全部
+              </button>
+            </div>
+          </section>
+        )}
+        <details
+          className={shared ? "care-date-filter" : "legacy-filters"}
+          open={shared ? undefined : true}
+        >
+          <summary>日期筛选与刷新</summary>
+          <section className="records-filters" aria-label="记录筛选">
+            {!shared && (
+              <>
+                <label>
+                  宠物范围
+                  <select
+                    disabled={busy}
+                    value={scope}
+                    onChange={(e) => {
+                      setScope(e.target.value);
+                      reset();
+                      setNotice("");
+                    }}
+                  >
+                    <option value="unlinked">未关联宠物</option>
+                    {!mismatch &&
+                      pets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </>
+            )}
+            <label className="record-type-select">
+              筛选类型
+              <select
+                disabled={busy}
+                value={kind}
+                onChange={(e) => setKind(e.target.value)}
+              >
+                <option value="">全部类型</option>
+                {Object.entries(labels).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
                   </option>
                 ))}
-            </select>
-          </label>
-          <label>
-            筛选类型
-            <select
-              disabled={busy}
-              value={kind}
-              onChange={(e) => setKind(e.target.value)}
-            >
-              <option value="">全部类型</option>
-              {Object.entries(labels).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            开始日期
-            <input
-              disabled={busy}
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            />
-          </label>
-          <label>
-            结束日期
-            <input
-              disabled={busy}
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
-          </label>
-          <button disabled={busy} onClick={() => setReload((v) => v + 1)}>
-            刷新记录
-          </button>
-        </section>
-        <WeightTrend
-          key={scope}
-          initialRange={trendRange}
-          onRangeChange={setTrendRange}
-          petId={
-            scope !== "unlinked" &&
-            !mismatch &&
-            !petError &&
-            pets.some((p) => p.id === scope)
-              ? scope
-              : null
-          }
-          petName={pets.find((p) => p.id === scope)?.name ?? "所选宠物"}
-          revision={reload}
-          onAdd={() => {
-            reset();
-            setType("weight");
-            document
-              .getElementById("record-weight")
-              ?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-          }}
-        />
+              </select>
+            </label>
+            <label>
+              开始日期
+              <input
+                disabled={busy}
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            </label>
+            <label>
+              结束日期
+              <input
+                disabled={busy}
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </label>
+            <button disabled={busy} onClick={() => setReload((v) => v + 1)}>
+              刷新记录
+            </button>
+          </section>
+        </details>
+        {shared && notice && (
+          <div className="notice success" role="status">
+            {notice}
+          </div>
+        )}
+        {shared && formError && (
+          <div className="notice error" role="alert">
+            {formError}
+          </div>
+        )}
         <div className="records-layout">
-          <section className="form-panel" id="record-weight">
+          <section
+            ref={formRef}
+            className={`form-panel ${shared ? "care-form" : ""} ${formOpen ? "is-open" : ""}`}
+            id="record-weight"
+          >
             <div className="form-heading">
               <div>
                 <span className="section-kicker">ADD RECORD</span>
@@ -301,15 +395,28 @@ export default function RecordsPage({
                 ✽
               </span>
             </div>
-            {notice && (
+            {!shared && notice && (
               <div className="notice success" role="status">
                 {notice}
               </div>
             )}
-            {formError && (
+            {!shared && formError && (
               <div className="notice error" role="alert">
                 {formError}
               </div>
+            )}
+            {shared && (
+              <button
+                className="close-care-form"
+                disabled={busy}
+                onClick={() => {
+                  if (!dirty || window.confirm("放弃未保存的记录内容？"))
+                    reset();
+                }}
+                aria-label="关闭记录表单"
+              >
+                ×
+              </button>
             )}
             <form onSubmit={save}>
               <fieldset className="field-grid" disabled={busy}>
@@ -400,11 +507,11 @@ export default function RecordsPage({
                 {error}
                 <button onClick={() => setReload((v) => v + 1)}>重试</button>
               </p>
-            ) : items.length === 0 ? (
+            ) : currentItems.length === 0 ? (
               <p>当前筛选下暂无记录。</p>
             ) : (
               <ol>
-                {items.map((item) => (
+                {currentItems.map((item) => (
                   <li key={item.id}>
                     <time>{item.occurred_on}</time>
                     <h3>
@@ -418,6 +525,12 @@ export default function RecordsPage({
                     <button
                       disabled={busy}
                       onClick={() => {
+                        if (
+                          dirty &&
+                          !window.confirm("放弃当前草稿并编辑这条记录？")
+                        )
+                          return;
+                        setFormOpen(true);
                         setEditing(item);
                         setType(item.record_type);
                         setDate(item.occurred_on);
@@ -438,6 +551,67 @@ export default function RecordsPage({
             )}
           </section>
         </div>
+        {shared ? (
+          <details className="record-trend">
+            <summary>查看体重趋势</summary>
+            <p className="data-source-note">
+              仅统计当前宠物的体重记录，不受记录列表的类型和日期筛选影响。
+            </p>
+            <WeightTrend
+              key={scope}
+              initialRange={trendRange}
+              onRangeChange={setTrendRange}
+              petId={
+                scope !== "unlinked" &&
+                !mismatch &&
+                !petError &&
+                pets.some((p) => p.id === scope)
+                  ? scope
+                  : null
+              }
+              petName={pets.find((p) => p.id === scope)?.name ?? "所选宠物"}
+              revision={reload}
+              onAdd={() => {
+                if (dirty && !window.confirm("放弃当前草稿并添加体重记录？"))
+                  return;
+                reset();
+                setType("weight");
+                setFormOpen(true);
+                document
+                  .getElementById("record-weight")
+                  ?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+              }}
+            />
+          </details>
+        ) : (
+          <>
+            <WeightTrend
+              key={scope}
+              initialRange={trendRange}
+              onRangeChange={setTrendRange}
+              petId={
+                scope !== "unlinked" &&
+                !mismatch &&
+                !petError &&
+                pets.some((p) => p.id === scope)
+                  ? scope
+                  : null
+              }
+              petName={pets.find((p) => p.id === scope)?.name ?? "所选宠物"}
+              revision={reload}
+              onAdd={() => {
+                if (dirty && !window.confirm("放弃当前草稿并添加体重记录？"))
+                  return;
+                reset();
+                setType("weight");
+                setFormOpen(true);
+                document
+                  .getElementById("record-weight")
+                  ?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+              }}
+            />
+          </>
+        )}
         <footer className="page-footer">
           <span>MADE FOR THE LITTLE ONES ♡</span>
           <span>宠爱，从了解开始。</span>
