@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import NearbyMap from "../components/nearby/NearbyMap";
 import AppHeader, { type AppPage } from "../components/common/AppHeader";
 import { nearbyClient, resolveAddress } from "../api/nearby";
 import {
@@ -104,6 +105,12 @@ export default function NearbyPage({
   const [radius, setRadius] = useState(3000);
   const [result, setResult] = useState<NearbyResponse | null>(null);
   const [resolvedAddressLabel, setResolvedAddressLabel] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const placeButtons = useRef(new Map<string, HTMLButtonElement>());
+  const selectMarker = useCallback((id: string) => {
+    setSelectedId(id);
+    placeButtons.current.get(id)?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [started, setStarted] = useState(false);
@@ -125,6 +132,7 @@ export default function NearbyPage({
     setLoading(true);
     setError("");
     setResult(null);
+    setSelectedId(null);
     setResolvedAddressLabel("");
     try {
       let data: NearbyResponse;
@@ -163,6 +171,7 @@ export default function NearbyPage({
     setLoading(true);
     setError("");
     setResult(null);
+    setSelectedId(null);
     setResolvedAddressLabel("");
     try {
       const data = await nearbyClient.search({
@@ -350,6 +359,11 @@ export default function NearbyPage({
                   （纬度 {result.search_center.location.lat.toFixed(4)}，经度{" "}
                   {result.search_center.location.lng.toFixed(4)}）
                 </p>
+                <NearbyMap
+                  result={result}
+                  selectedId={selectedId}
+                  onSelect={selectMarker}
+                />
                 {result.places.length === 0 ? (
                   <p className="nearby-empty">
                     {result.source === "demo"
@@ -357,7 +371,12 @@ export default function NearbyPage({
                       : "当前查询范围内没有匹配地点，可放大半径或换一类地点。"}
                   </p>
                 ) : (
-                  <PlaceList places={result.places} />
+                  <PlaceList
+                    places={result.places}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    buttons={placeButtons.current}
+                  />
                 )}
               </>
             )}
@@ -522,7 +541,17 @@ function AddressSearch({
   );
 }
 
-function PlaceList({ places }: { places: Place[] }) {
+function PlaceList({
+  places,
+  selectedId,
+  onSelect,
+  buttons,
+}: {
+  places: Place[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  buttons: Map<string, HTMLButtonElement>;
+}) {
   return (
     <section className="nearby-panel" aria-label="地点列表">
       <div className="panel-title">
@@ -532,10 +561,32 @@ function PlaceList({ places }: { places: Place[] }) {
         </div>
       </div>
       <ul className="place-list">
-        {places.map((place) => (
-          <li key={place.id} className="place-card">
+        {places.map((place, index) => (
+          <li
+            key={place.id}
+            className={
+              selectedId === place.id
+                ? "place-card place-card-selected"
+                : "place-card"
+            }
+          >
             <div className="place-top">
-              <strong>{place.name}</strong>
+              {import.meta.env.VITE_AMAP_JS_KEY?.trim() ? (
+                <button
+                  type="button"
+                  className="place-map-select"
+                  ref={(element) => {
+                    if (element) buttons.set(place.id, element);
+                    else buttons.delete(place.id);
+                  }}
+                  aria-pressed={selectedId === place.id}
+                  onClick={() => onSelect(place.id)}
+                >
+                  {index + 1}. {place.name}
+                </button>
+              ) : (
+                <strong>{place.name}</strong>
+              )}
               <span className="place-distance">
                 {formatDistance(place.distance_m)}
               </span>

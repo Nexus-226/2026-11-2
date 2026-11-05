@@ -83,3 +83,17 @@ VITE_REMINDER_DATA_SOURCE=api
 本地使用 Qwen 或查询真实附近地点时，分别在仓库根目录的 `.env` 中配置 `LLM_API_KEY` 和 `AMAP_WEB_SERVICE_KEY`。其他可选配置见 [.env.example](.env.example)。
 
 开发资料可查阅[技术栈说明](docs/TECH_STACK.md)、[接口文档](docs/API.md)和[项目任务记录](docs/TASKS.md)。
+
+
+### 附近服务的高德底图
+
+在 `frontend/.env.local` 配置下列变量并重启 Vite。使用高德开放平台「Web 端（JS API）」应用的 Key 和配套安全密钥。
+
+```dotenv
+VITE_AMAP_JS_KEY=
+AMAP_JS_SECURITY_CODE=
+```
+
+前端使用高德 JS API 2.0 和官方加载器 `@amap/amap-jsapi-loader@1.0.1`（MIT）。开发服务器通过同源 `/_AMapService/` 为底图初始化请求注入安全密钥。构建产物部署时，需在托管服务的反向代理配置相同路径并由服务端注入 `jscode`，Vite 的开发代理不会随构建产物发布。附近地点仍由后端 Web 服务 Key 查询，两套凭据分别配置。[JS API 快速上手](https://lbs.amap.com/api/javascript-api-v2/getting-started) · [安全密钥代理](https://lbs.amap.com/api/maps-javascript-api/guide/abc/jscode)
+
+打开「附近服务」并选择演示区域，核对道路底图、查询中心和编号标记。点击列表项可将地图移至对应标记，点击标记可选中对应列表项。拖动地图只改变视图。拒绝定位后可选择演示区域或输入地址。底图加载失败时可继续使用地点列表。配置后端 Web 服务 Key 后，再使用定位或地址验证地点来源标为高德实时，并抽查地标位置。
