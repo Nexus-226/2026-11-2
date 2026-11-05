@@ -417,3 +417,11 @@ it("failed record saves keep the draft and expose the original API error", async
   fireEvent.click(nav("我的"));
   expect(screen.getByRole("heading", { name: /^日常记录/ })).toBeTruthy();
 });
+
+it("opens nearby services directly from the mobile navigation", () => {
+  render(<App />);
+  const nearby = nav("附近服务");
+  fireEvent.click(nearby);
+  expect(screen.getByRole("heading", { name: /^附近服务/ })).toBeTruthy();
+  expect(nearby.getAttribute("aria-current")).toBe("page");
+});
