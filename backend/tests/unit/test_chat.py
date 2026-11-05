@@ -198,6 +198,7 @@ def test_run_chat_prompt_warns_not_to_equate_other_names() -> None:
         provider=CapturingProvider(),
     )
     assert "不要自动当成这只关联宠物" in captured["system_prompt"]
+    assert "先调用 list_pets 核对" in captured["system_prompt"]
 
 
 def test_run_chat_prompt_labels_other_species_pet() -> None:
