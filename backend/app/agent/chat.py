@@ -85,20 +85,13 @@ def _select_history(
     return selected
 
 
-def _associated_pet_context(pet: PetRead) -> str:
-    """关联宠物的名字与物种，写入系统提示让模型能识别用户提到的宠物名。
-
-    名字来自 Service 返回的档案事实；物种沿用 other/other_species 语义，
-    避免模型把用户口中的名字当成会话里未出现过的宠物。
-    """
+def _associated_pet_species(pet: PetRead) -> str:
+    """关联宠物的物种说明，沿用 other/other_species 语义。"""
     if pet.species == "other":
         if pet.other_species:
-            species = f"other（具体物种：{pet.other_species}）"
-        else:
-            species = "other（未填具体物种）"
-    else:
-        species = pet.species
-    return f"名字「{pet.name}」，species={species}，pet_id={pet.id}"
+            return f"other（具体物种：{pet.other_species}）"
+        return "other（未填具体物种）"
+    return pet.species
 
 
 def run_chat(
@@ -139,10 +132,13 @@ def run_chat(
     if pet_id is not None:
         associated_pet = service.get_pet(pet_id)
         if associated_pet is not None:
+            species = _associated_pet_species(associated_pet)
             system += (
-                f" 当前关联宠物：{_associated_pet_context(associated_pet)}。"
-                "用户提到这只宠物（名字，或“它/这只宠物/当前宠物”）时，"
-                "优先按这只关联宠物理解并回答，不要当成会话里没出现过的宠物；"
+                f" 当前关联宠物：名字「{associated_pet.name}」，"
+                f"species={species}，pet_id={pet_id}。"
+                f"当用户提到这只宠物的名字「{associated_pet.name}」，"
+                "或“它/这只宠物/当前宠物”时，优先按这只关联宠物理解并回答；"
+                "用户提到的是其他名字时，不要自动当成这只关联宠物，先确认是哪只宠物。"
                 "需要档案详情时调用 get_pet_profile 查询。"
             )
         else:
