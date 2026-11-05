@@ -34,6 +34,7 @@ def _place(**overrides: object) -> Place:
         "location": {"lat": 39.9041, "lng": 116.4021},
         "distance_m": 860,
         "business_status": "open",
+        "business_hours_today": None,
         "navigation_url": None,
         "data_source": "demo",
     }

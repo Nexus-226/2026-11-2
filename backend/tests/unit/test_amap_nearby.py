@@ -2,7 +2,9 @@
 
 import logging
 from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -23,6 +25,7 @@ from app.services.amap import (
     gcj02_to_wgs84,
     wgs84_to_gcj02,
 )
+from app.services.nearby_service import _derive_business_status
 
 TEST_KEY = "test-amap-key"
 
@@ -73,6 +76,7 @@ def poi(
     gcj_lng: float,
     type_name: str = "医疗保健服务;动物医疗场所;宠物医院",
     tel: str | None = None,
+    opentime_today: str | None = None,
     address: str = "示例路 18 号",
 ) -> dict[str, object]:
     body: dict[str, object] = {
@@ -82,8 +86,13 @@ def poi(
         "type": type_name,
         "address": address,
     }
+    business: dict[str, str] = {}
     if tel is not None:
-        body["business"] = {"tel": tel}
+        business["tel"] = tel
+    if opentime_today is not None:
+        business["opentime_today"] = opentime_today
+    if business:
+        body["business"] = business
     return body
 
 
@@ -157,12 +166,146 @@ def test_nearby_uses_amap_results_and_converts_coordinates(
     assert first["name"] == "安心宠物医院"
     assert first["phone"] == "010-1234-5678"
     assert first["address"] == "示例路 18 号"
+    # 未返回 opentime_today：状态保持 unknown，营业时间原文为 null。
     assert first["business_status"] == "unknown"
+    assert first["business_hours_today"] is None
     assert first["navigation_url"] is None
     assert isinstance(first["distance_m"], int)
     # 响应坐标已转回 WGS84：与高德原始 GCJ-02 不同，且偏差有限。
     assert 1e-6 < abs(first["location"]["lat"] - 39.9045) < 0.02
     assert 1e-6 < abs(first["location"]["lng"] - 116.4050) < 0.02
+
+
+def test_nearby_amap_derives_status_from_opentime_today(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_amap_key(monkeypatch)
+    # 注入北京时间 15:00，覆盖 open/closed/24小时/无法解析/缺失五种形态。
+    monkeypatch.setattr(
+        nearby_service,
+        "_now_beijing",
+        lambda: datetime(2026, 11, 5, 15, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    requests: list[httpx.Request] = []
+    pois = [
+        poi(
+            "B0AAA1",
+            "常规医院",
+            gcj_lat=39.9045,
+            gcj_lng=116.4050,
+            opentime_today="09:00-21:00",
+        ),
+        poi(
+            "B0BBB2",
+            "深夜医院",
+            gcj_lat=39.9090,
+            gcj_lng=116.4094,
+            opentime_today="22:00-02:00",
+        ),
+        poi(
+            "B0CCC3",
+            "全天医院",
+            gcj_lat=39.9133,
+            gcj_lng=116.4139,
+            opentime_today="24小时营业",
+        ),
+        poi(
+            "B0DDD4",
+            "文本异常医院",
+            gcj_lat=39.9177,
+            gcj_lng=116.4183,
+            opentime_today="周末休息",
+        ),
+        poi("B0EEEE5", "无营业时间医院", gcj_lat=39.9221, gcj_lng=116.4228),
+    ]
+    patch_client(monkeypatch, around_transport(requests, pois))
+    response = client.get(
+        "/api/v1/nearby",
+        params={"lat": 39.9001, "lng": 116.4001, "type": "pet_hospital"},
+    )
+    assert response.status_code == 200
+    places = {item["id"]: item for item in response.json()["places"]}
+    # 北京时间 15:00 落在 09:00-21:00 内 → open，原文透出。
+    assert places["amap:B0AAA1"]["business_status"] == "open"
+    assert places["amap:B0AAA1"]["business_hours_today"] == "09:00-21:00"
+    # 跨午夜 22:00-02:00 在 15:00 尚未开始 → closed（凌晨歧义由矩阵覆盖）。
+    assert places["amap:B0BBB2"]["business_status"] == "closed"
+    assert places["amap:B0CCC3"]["business_status"] == "open"
+    assert places["amap:B0CCC3"]["business_hours_today"] == "24小时营业"
+    # 无法解析：状态 unknown，原文仍透出供前端展示。
+    assert places["amap:B0DDD4"]["business_status"] == "unknown"
+    assert places["amap:B0DDD4"]["business_hours_today"] == "周末休息"
+    assert places["amap:B0EEEE5"]["business_status"] == "unknown"
+    assert places["amap:B0EEEE5"]["business_hours_today"] is None
+
+
+def test_place_detail_returns_business_hours_and_derived_status(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    set_amap_key(monkeypatch)
+    monkeypatch.setattr(
+        nearby_service,
+        "_now_beijing",
+        lambda: datetime(2026, 11, 5, 15, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    poi_body = poi(
+        "B0KUVYPK24",
+        "动科宠物诊疗中心(中大店)",
+        gcj_lat=23.0999,
+        gcj_lng=113.2999,
+        opentime_today="10:00-03:00",
+    )
+    patch_client(monkeypatch, detail_transport([poi_body]))
+    response = client.get(
+        "/api/v1/places/amap:B0KUVYPK24", params={"lat": 39.9001, "lng": 116.4001}
+    )
+    assert response.status_code == 200
+    place = response.json()
+    # 北京时间 15:00 已过今日开始时间 10:00 → 跨午夜区间按营业处理。
+    assert place["business_status"] == "open"
+    assert place["business_hours_today"] == "10:00-03:00"
+
+
+@pytest.mark.parametrize(
+    ("opentime_today", "hour", "minute", "expected"),
+    [
+        (None, 10, 0, "unknown"),
+        ("   ", 10, 0, "unknown"),
+        ("24小时营业", 3, 0, "open"),
+        ("24小时营业", 23, 59, "open"),
+        ("09:00-21:00", 9, 0, "open"),
+        ("09:00-21:00", 20, 59, "open"),
+        ("09:00-21:00", 21, 0, "closed"),
+        ("09:00-21:00", 2, 0, "closed"),
+        ("09:00-24:00", 23, 59, "open"),
+        ("09:00-24:00", 0, 0, "closed"),
+        ("00:00-24:00", 23, 59, "open"),
+        ("9:00-21:00", 12, 0, "open"),
+        ("09:00-12:00,13:30-18:00", 12, 30, "closed"),
+        ("09:00-12:00,13:30-18:00", 13, 30, "open"),
+        ("09:00-12:00、13:30-18:00", 12, 0, "closed"),
+        ("09:00-12:00 13:30-18:00", 14, 0, "open"),
+        ("09:00-21:00 10:00-15:00 10:00-17:00", 15, 30, "open"),
+        ("10:00-03:00", 23, 0, "open"),
+        ("10:00-03:00", 10, 0, "open"),
+        ("10:00-03:00", 2, 0, "unknown"),
+        ("10:00-03:00", 3, 0, "closed"),
+        ("10:00-03:00", 5, 0, "closed"),
+        ("09:00-21:00,10:00-03:00", 2, 0, "unknown"),
+        ("09:00-21:00,10:00-03:00", 5, 0, "closed"),
+        ("周末休息", 12, 0, "unknown"),
+        ("09:00到21:00", 12, 0, "unknown"),
+        ("09:00-21:00（节假日照常）", 12, 0, "unknown"),
+        ("09:00-09:00", 9, 30, "unknown"),
+        ("24:00-02:00", 1, 0, "unknown"),
+        ("09:60-21:00", 12, 0, "unknown"),
+    ],
+)
+def test_derive_business_status_covers_periods_and_midnight(
+    opentime_today: str | None, hour: int, minute: int, expected: str
+) -> None:
+    now = datetime(2026, 11, 5, hour, minute, tzinfo=ZoneInfo("Asia/Shanghai"))
+    assert _derive_business_status(opentime_today, now) == expected
 
 
 def test_nearby_dedupes_by_amap_id_and_filters_by_radius(

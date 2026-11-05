@@ -19,6 +19,7 @@ PLACE_FIELDS = {
     "location",
     "distance_m",
     "business_status",
+    "business_hours_today",
     "navigation_url",
     "data_source",
 }
@@ -81,6 +82,8 @@ def test_demo_region_returns_demo_places_sorted_by_distance(
         assert place["category"] == "pet_hospital"
         assert place["navigation_url"] is None
         assert place["business_status"] in {"open", "closed", "unknown"}
+        # 演示地点没有营业时间数据；状态是固定值而非推算。
+        assert place["business_hours_today"] is None
         assert place["distance_m"] >= 0
 
 

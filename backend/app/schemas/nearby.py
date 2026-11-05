@@ -40,6 +40,9 @@ class Place(BaseModel):
     location: GeoLocation
     distance_m: int
     business_status: BusinessStatus
+    # 数据源返回的今日营业时间原文（高德 opentime_today，未解析也原样
+    # 返回）；缺失为 null。演示地点没有营业时间数据，恒为 null。
+    business_hours_today: str | None
     navigation_url: str | None
     data_source: NearbyDataSource
 
