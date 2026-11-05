@@ -6,6 +6,7 @@
 访问隔离、位置元数据清理和私有存储。
 """
 
+import logging
 import os
 import re
 from datetime import date
@@ -18,7 +19,6 @@ from sqlalchemy.orm import Session
 from app.db.models import VlogMedia, VlogPost
 from app.db.repositories import pets as pet_repository
 from app.db.repositories import vlogs as vlog_repository
-from app.db.repositories.pets import get_local_user
 from app.schemas.vlog import (
     IMAGE_MAX_BYTES,
     MAX_IMAGES_PER_VLOG,
@@ -29,6 +29,9 @@ from app.schemas.vlog import (
     VlogRead,
     VlogUpdate,
 )
+from app.services import vlog_media
+
+logger = logging.getLogger(__name__)
 
 STORAGE_KEY_PATTERN = re.compile(r"^[0-9a-f]{32}\.(jpg|png|mp4)$")
 MEDIA_URL_PREFIX = "/api/v1/vlogs/media/"
@@ -101,8 +104,9 @@ def _remove_quietly(paths: list[Path]) -> None:
         try:
             path.unlink(missing_ok=True)
         except OSError:
-            # 清理失败仅留下待回收文件，不影响主流程的错误返回。
-            pass
+            logger.warning(
+                "Could not remove failed Vlog upload %s", path.name, exc_info=True
+            )
 
 
 def _media_read(row: VlogMedia) -> VlogMediaRead:
@@ -204,19 +208,33 @@ def create_vlog(
     session: Session, *, values: VlogCreate, files: list[UploadFile]
 ) -> VlogRead:
     plan = _validate_upload_plan(session, values, files)
-    user = get_local_user(session)
+    session.rollback()  # Release the read transaction before copying media.
     directory = media_dir()
     written: list[Path] = []
     media_rows: list[dict[str, object]] = []
     try:
-        directory.mkdir(parents=True, exist_ok=True)
+        if plan:
+            directory.mkdir(parents=True, exist_ok=True)
         for file, media_type, content_type, extension in plan:
             storage_key = f"{uuid4().hex}{extension}"
             target = directory / storage_key
+            written.append(target)
             size = _copy_stream(file, target, _limit_bytes(media_type))
             if size == 0:
                 raise _error(400, "VLOG_MEDIA_EMPTY", "不能上传空文件")
-            written.append(target)
+            try:
+                vlog_media.validate(target, extension)
+            except vlog_media.InvalidMedia as exc:
+                raise _error(
+                    400, "VLOG_MEDIA_UNSUPPORTED", "媒体文件损坏或格式不受支持"
+                ) from exc
+            except vlog_media.ProbeUnavailable as exc:
+                raise _error(
+                    503,
+                    "VLOG_MEDIA_PROBE_UNAVAILABLE",
+                    "视频校验不可用，请检查 ffprobe",
+                    retryable=True,
+                ) from exc
             media_rows.append(
                 {
                     "storage_key": storage_key,
@@ -226,10 +244,14 @@ def create_vlog(
                     "size_bytes": size,
                 }
             )
+        lock_writes(session)
+        pet = pet_repository.get_pet(session, values.pet_id)
+        if pet is None:
+            raise _error(404, "PET_NOT_FOUND", "未找到宠物")
         vlog = vlog_repository.create_vlog(
             session,
             vlog_id=uuid4(),
-            user_id=user.id,
+            user_id=pet.user_id,
             pet_id=str(values.pet_id),
             caption=values.caption,
             occurred_on=values.occurred_on,
@@ -252,37 +274,38 @@ def update_vlog(session: Session, vlog_id: UUID, values: VlogUpdate) -> VlogRead
     return to_read(session, vlog)
 
 
+def lock_writes(session: Session) -> None:
+    vlog_repository.lock_writes(session)
+
+
 def delete_vlog(session: Session, vlog_id: UUID) -> None:
-    """删除条目并回收媒体：文件先删，失败可整体重试。"""
+    retry_media_cleanup(session)
+    lock_writes(session)
     vlog = get_vlog_or_404(session, vlog_id)
-    keys = [
-        row.storage_key for row in vlog_repository.list_media_for_vlog(session, vlog.id)
-    ]
-    _reclaim_media_files(keys)
     vlog_repository.delete_vlog(session, vlog)
+    retry_media_cleanup(session)
 
 
 def delete_vlogs_for_pet(session: Session, pet_id: UUID) -> None:
-    """删除宠物时同步处理关联媒体（P2 提案）：文件先回收，失败可重试。"""
-    keys = vlog_repository.list_storage_keys_for_pet(session, str(pet_id))
-    if not keys:
-        return
-    _reclaim_media_files(keys)
     vlog_repository.delete_vlogs_for_pet(session, str(pet_id))
 
 
-def _reclaim_media_files(keys: list[str]) -> None:
-    directory = media_dir()
-    for key in keys:
-        try:
-            (directory / key).unlink(missing_ok=True)
-        except OSError as exc:
-            raise _error(
-                500,
-                "VLOG_MEDIA_CLEANUP_FAILED",
-                "媒体文件回收失败，请稍后重试",
-                retryable=True,
-            ) from exc
+def retry_media_cleanup(session: Session) -> None:
+    """Remove only files whose database references have already been deleted."""
+    reclaimed = []
+    try:
+        directory = media_dir()
+        for key in vlog_repository.pending_media_cleanup(session):
+            try:
+                (directory / key).unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Vlog media cleanup pending for %s", key, exc_info=True)
+            else:
+                reclaimed.append(key)
+        vlog_repository.finish_media_cleanup(session, reclaimed)
+    except Exception:
+        session.rollback()
+        logger.exception("Could not complete Vlog media cleanup")
 
 
 def read_media_file(session: Session, storage_key: str) -> tuple[Path, VlogMedia]:

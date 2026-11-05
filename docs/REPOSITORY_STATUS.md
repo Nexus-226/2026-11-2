@@ -137,6 +137,6 @@ A/B 评审修订：同步 main `1635904`（含 #69），保留主线三份文档
 
 按 [PR #92](https://github.com/Nexus-226/Pet_Agent/pull/92) 提案完成 B 侧任务「私人宠物 Vlog」首版交付（分支 `feat/p2-b-vlog`）：后端条目 CRUD 与本地媒体存储，及最小前端时间线页（复用记录页的宠物选择、表单与时间线样式）。
 
-范围：`GET/POST /api/v1/vlogs`、`PATCH/DELETE /api/v1/vlogs/{id}` 与经应用路由读取的 `GET /api/v1/vlogs/media/{storage_key}`；`vlog_posts`/`vlog_media` 两表与迁移 0007；创建用 multipart、编辑用 JSON（不替换媒体）；媒体按文件头校验实际格式（JPEG/PNG/MP4）并写入本地私有目录（默认 `./vlog-media`，`PET_AGENT_VLOG_MEDIA_DIR` 可改），数据库只存元数据；上传失败清理半成品，删除条目/宠物先回收媒体，失败可重试；删除宠物级联处理其全部 Vlog。前端桌面导航新增「宠物 Vlog」，移动端经「我的」入口进入（沿用 #83 的 authorize 守卫），底栏四项不变，`src/api`/`src/types` 新增 vlog 模块不动既有客户端。
+范围：`GET/POST /api/v1/vlogs`、`PATCH/DELETE /api/v1/vlogs/{id}` 与经应用路由读取的 `GET /api/v1/vlogs/media/{storage_key}`；`vlog_posts`/`vlog_media` 两表与迁移 0007；创建用 multipart、编辑用 JSON（不替换媒体）；图片经 Pillow 校验和解码，MP4 经 ffprobe 校验容器与媒体流，并写入本地私有目录（默认 `./vlog-media`，`PET_AGENT_VLOG_MEDIA_DIR` 可改），数据库保存元数据与待回收文件的键。上传失败尝试清理半成品。删除条目或宠物先提交数据库变更，再回收文件，失败的回收随下次删除重试。删除宠物级联处理其全部 Vlog，包括纯文字条目。前端桌面导航新增「宠物 Vlog」，移动端经「我的」入口进入（沿用 #83 的 authorize 守卫），底栏四项不变，`src/api`/`src/types` 新增 vlog 模块不动既有客户端。
 
-新增依赖 `python-multipart>=0.0.9,<0.1`（FastAPI multipart 解析）。本地验证：后端 311 项测试通过（新增 13 项覆盖上传限额、格式嗅探、失败清理、删除回收与宠物级联）、前端 120 项测试通过（新增 6 项）及生产构建、Ruff 与 Prettier 检查通过；另以 uvicorn 真实服务完成一次端到端冒烟（真实宠物 ID 上传图片/视频、字节一致回放、修改、删除回收与宠物级联）。未做真实浏览器全流程联调，不做转码与多用户隔离；共享部署前的真实身份、媒体访问隔离等仍按提案留待后续。编号 P2-6 为暂登记，待 PR #92 评审确认。
+新增依赖 `python-multipart>=0.0.9,<0.1`（FastAPI multipart 解析）、`Pillow>=12.2,<13`（图片校验）和 ffprobe（MP4 校验）。本地验证：原 PR 后端 311 项复跑通过。修复后端 317 项和前端 121 项通过，生产构建通过。用本机 Edge、Vite 和 uvicorn，选择真实 API 创建的测试宠物，验证上传连接中断后可重试、刷新后显示图片并播放视频、修改和删除、删除宠物后媒体地址返回 404。自动化另覆盖超限、损坏文件、写入失败清理、数据库提交失败和回收重试。媒体校验实测使用 Pillow 12.3.0 和 ffprobe 9.0.2。编号 P2-6 为暂登记，待 PR #92 评审确认。
