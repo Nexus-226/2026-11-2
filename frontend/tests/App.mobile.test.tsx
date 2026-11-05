@@ -425,3 +425,20 @@ it("opens nearby services directly from the mobile navigation", () => {
   expect(screen.getByRole("heading", { name: /^附近服务/ })).toBeTruthy();
   expect(nearby.getAttribute("aria-current")).toBe("page");
 });
+
+it("opens Vlog from its own bottom tab and removes the entry from My Page", async () => {
+  render(<App />);
+  fireEvent.click(nav("宠物 Vlog"));
+
+  expect(
+    await screen.findByRole("heading", { name: /宠物 Vlog/ }),
+  ).toBeTruthy();
+  expect(nav("宠物 Vlog").getAttribute("aria-current")).toBe("page");
+  expect(nav("我的").hasAttribute("aria-current")).toBe(false);
+
+  fireEvent.click(nav("我的"));
+  const entries = screen.getByRole("region", { name: "宠物生活功能" });
+  expect(
+    within(entries).queryByRole("button", { name: /宠物 Vlog/ }),
+  ).toBeNull();
+});

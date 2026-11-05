@@ -71,6 +71,7 @@ export function AppBottomNav() {
         [
           ["chat", "助手"],
           ["records", "记录"],
+          ["vlogs", "宠物 Vlog"],
           ["nearby", "附近服务"],
           ["mine", "我的"],
         ] as const
@@ -78,7 +79,7 @@ export function AppBottomNav() {
         const active =
           shared.page === id ||
           (id === "mine" &&
-            ["pets", "vlogs", "reminders", "lost"].includes(shared.page));
+            ["pets", "reminders", "lost"].includes(shared.page));
         return (
           <button
             key={id}

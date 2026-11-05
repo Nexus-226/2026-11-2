@@ -74,7 +74,6 @@ export default function MyPage() {
                 : "选择宠物或创建档案",
             ],
             ["reminders", "待办提醒", "查看和管理宠物待办"],
-            ["vlogs", "宠物 Vlog", "按宠物浏览图文与短视频时间线"],
             ["lost", "寻宠信息卡", "准备、预览与复制文字卡"],
           ] as const
         ).map(([id, title, description]) => (
