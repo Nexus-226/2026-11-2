@@ -331,11 +331,11 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 | `POST /api/v1/vlogs` | 创建（multipart 表单）：`pet_id`、`occurred_on`、`caption?`、`files?`；每篇最多 3 张 JPEG/PNG（每张 5 MB）或 1 段 MP4（20 MB），不可混用；`caption` 去首尾空白后允许为空，最长 2000 字符 |
 | `GET /api/v1/vlogs/{id}` | 单条详情；不存在返回 `404 VLOG_NOT_FOUND` |
 | `PATCH /api/v1/vlogs/{id}` | 编辑（JSON）：`caption?`（显式 `null` 表示清空）、`occurred_on?`；至少一个字段；首版不支持替换媒体，删除后重建 |
-| `DELETE /api/v1/vlogs/{id}` | 删除条目并回收媒体文件，`204` |
+| `DELETE /api/v1/vlogs/{id}` | 删除条目并撤销媒体访问，`204`。文件回收失败时保留待办 |
 | `GET /api/v1/vlogs/media/{storage_key}` | 经应用路由读取媒体（`FileResponse`）；键由服务端生成，不信任客户端路径 |
 
 - 日期沿用共同规则：`occurred_on` 不得晚于上海时区今天（`422 VALIDATION_ERROR`）。
-- 媒体按文件头识别实际格式，不信任扩展名与声明类型；`400` 错误码：`VLOG_MEDIA_UNSUPPORTED`、`VLOG_MEDIA_TOO_LARGE`、`VLOG_MEDIA_TOO_MANY`、`VLOG_MEDIA_MIXED`、`VLOG_MEDIA_EMPTY`。
+- 媒体按文件头识别候选格式，再解码 JPEG/PNG 或用 ffprobe 检查 MP4 容器与媒体流。MP4 首版支持 H.264 视频，音轨可选 AAC。视频校验程序不可用时返回 `VLOG_MEDIA_PROBE_UNAVAILABLE`（503，可重试）；`400` 错误码：`VLOG_MEDIA_UNSUPPORTED`、`VLOG_MEDIA_TOO_LARGE`、`VLOG_MEDIA_TOO_MANY`、`VLOG_MEDIA_MIXED`、`VLOG_MEDIA_EMPTY`。
 - 媒体文件保存在本地私有目录（默认 `./vlog-media`，已加入 `.gitignore`；`PET_AGENT_VLOG_MEDIA_DIR` 可指向仓库外目录），数据库只存条目与文件元数据。
-- 写盘或入库失败自动清理已写入文件并返回 `VLOG_MEDIA_STORAGE_FAILED`（500，`retryable=true`）；删除条目或删除宠物时先回收媒体文件，失败返回 `VLOG_MEDIA_CLEANUP_FAILED`（500，`retryable=true`），数据不删除，可整体重试。
-- 删除宠物会同步删除其全部 Vlog 并回收媒体；宠物仍被记录/提醒引用时的 `PET_IN_USE`（409）行为保持不变。
+- 写盘或入库失败会尝试清理包括当前半成品在内的已写入文件，并返回 `VLOG_MEDIA_STORAGE_FAILED`（500，`retryable=true`）。删除条目或宠物时，数据库在同一事务撤销媒体访问并登记待回收文件，提交后尝试清理。磁盘清理失败时删除仍返回 `204`，下次删除宠物或 Vlog 时自动重试。对已删除资源重复发送 DELETE 仍返回 `404`。
+- 删除宠物会删除其全部 Vlog（含纯文字条目）并回收媒体；宠物仍被记录/提醒引用时的 `PET_IN_USE`（409）行为保持不变。

@@ -1,23 +1,34 @@
 import re
+import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from io import BytesIO
 from pathlib import Path
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import URL, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.models import VlogMedia, VlogPost
+from app.db.models import VlogMedia, VlogMediaCleanup, VlogPost
 from app.db.session import get_db, init_db
 from app.main import app
-from app.services import vlog_service
+from app.services import pet_service, vlog_service
 
-PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"0" * 24
-JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"0" * 24
+
+def sample_image(format_name: str) -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (2, 2), "blue").save(output, format=format_name)
+    return output.getvalue()
+
+
+PNG_BYTES = sample_image("PNG")
+JPEG_BYTES = sample_image("JPEG")
 MP4_BYTES = b"\x00\x00\x00\x18ftypmp42" + b"0" * 16
 
 
@@ -213,6 +224,7 @@ def test_write_failure_cleans_partial_files(
     def flaky(file, target, limit):
         calls["n"] += 1
         if calls["n"] == 2:
+            target.write_bytes(b"partial upload")
             raise OSError("disk full")
         return original(file, target, limit)
 
@@ -400,30 +412,107 @@ def test_pet_with_records_still_blocked_and_vlogs_kept(
     assert client.get(f"/api/v1/vlogs/{vlog['id']}").status_code == 200
 
 
-def test_pet_delete_media_failure_is_retryable(
+@pytest.mark.parametrize("delete_pet", [False, True])
+def test_partial_media_cleanup_is_persisted_and_retried(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    delete_pet: bool,
+) -> None:
+    pet_id = create_pet(client)
+    vlog = upload(
+        client,
+        pet_id,
+        [
+            ("files", ("a.png", PNG_BYTES, "image/png")),
+            ("files", ("b.png", PNG_BYTES, "image/png")),
+        ],
+    ).json()
+
+    original_unlink = Path.unlink
+    calls = 0
+
+    def broken_once(self: Path, missing_ok: bool = False) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("permission denied")
+        original_unlink(self, missing_ok=missing_ok)
+
+    url = f"/api/v1/pets/{pet_id}" if delete_pet else f"/api/v1/vlogs/{vlog['id']}"
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", broken_once)
+        assert client.delete(url).status_code == 204
+
+    remaining = media_files(tmp_path / "media")
+    assert len(remaining) == 1
+    with engine_session(tmp_path) as session:
+        assert session.get(VlogMediaCleanup, remaining[0]) is not None
+    for item in vlog["media"]:
+        assert client.get(item["url"]).status_code == 404
+    assert client.get(f"/api/v1/vlogs/{vlog['id']}").status_code == 404
+    assert client.delete(url).status_code == 404
+    assert media_files(tmp_path / "media") == []
+    with engine_session(tmp_path) as session:
+        assert session.get(VlogMediaCleanup, remaining[0]) is None
+
+
+def test_pet_delete_cascades_text_only_vlog(client: TestClient) -> None:
+    pet_id = create_pet(client)
+    vlog = upload(client, pet_id, [], caption="散步").json()
+    assert client.delete(f"/api/v1/pets/{pet_id}").status_code == 204
+    assert client.get(f"/api/v1/vlogs/{vlog['id']}").status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("filename", "payload", "mime"),
+    [
+        ("broken.png", PNG_BYTES[:16], "image/png"),
+        ("broken.jpg", JPEG_BYTES[:-50], "image/jpeg"),
+    ],
+)
+def test_rejects_truncated_image(client, tmp_path, filename, payload, mime):
+    pet_id = create_pet(client)
+    response = upload(client, pet_id, [("files", (filename, payload, mime))])
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VLOG_MEDIA_UNSUPPORTED"
+    assert media_files(tmp_path / "media") == []
+
+
+@pytest.mark.skipif(
+    shutil.which("ffprobe") is None, reason="ffprobe is needed for video validation"
+)
+def test_video_probe_rejects_signature_only_and_accepts_playable_mp4(client, tmp_path):
+    pet_id = create_pet(client)
+    bad = upload(client, pet_id, [("files", ("broken.mp4", MP4_BYTES, "video/mp4"))])
+    assert bad.status_code == 400
+    assert bad.json()["error"]["code"] == "VLOG_MEDIA_UNSUPPORTED"
+    assert media_files(tmp_path / "media") == []
+
+    video = (Path(__file__).parents[1] / "fixtures/vlog-sample.mp4").read_bytes()
+    good = upload(client, pet_id, [("files", ("sample.mp4", video, "video/mp4"))])
+    assert good.status_code == 201
+    media_url = good.json()["media"][0]["url"]
+    assert client.get(media_url).content == video
+
+
+def test_pet_delete_commit_failure_keeps_vlogs_and_files(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pet_id = create_pet(client)
     vlog = upload(client, pet_id, [("files", ("a.png", PNG_BYTES, "image/png"))]).json()
 
-    original_unlink = Path.unlink
-    calls = {"n": 0}
+    def fail_commit() -> None:
+        raise OSError("simulated database commit failure")
 
-    def broken_once(self: Path, missing_ok: bool = False) -> None:
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise OSError("permission denied")
-        original_unlink(self, missing_ok=missing_ok)
+    with engine_session(tmp_path) as session:
+        monkeypatch.setattr(session, "commit", fail_commit)
+        with pytest.raises(OSError, match="simulated database commit failure"):
+            pet_service.delete_pet(session, UUID(pet_id))
+        session.rollback()
+        key = vlog["media"][0]["url"].rsplit("/", 1)[-1]
+        assert session.get(VlogMediaCleanup, key) is None
 
-    monkeypatch.setattr(Path, "unlink", broken_once)
-    failed = client.delete(f"/api/v1/pets/{pet_id}")
-    assert failed.status_code == 500
-    body = failed.json()["error"]
-    assert body["code"] == "VLOG_MEDIA_CLEANUP_FAILED"
-    assert body["retryable"] is True
-
-    # 行未删除、媒体仍在：重试成功并完成回收。
+    assert client.get(f"/api/v1/pets/{pet_id}").status_code == 200
     assert client.get(f"/api/v1/vlogs/{vlog['id']}").status_code == 200
-    retried = client.delete(f"/api/v1/pets/{pet_id}")
-    assert retried.status_code == 204
-    assert media_files(tmp_path / "media") == []
+    assert client.get(vlog["media"][0]["url"]).content == PNG_BYTES

@@ -11,11 +11,11 @@ from app.schemas.pet import (
     PetCreate,
     PetRead,
 )
+from app.services import vlog_service
 from app.services.record_service import ensure_pet_can_be_deleted
 from app.services.reminder_service import (
     ensure_pet_can_be_deleted as ensure_pet_has_no_reminders,
 )
-from app.services.vlog_service import delete_vlogs_for_pet as delete_pet_vlogs
 
 
 def list_pets(session: Session) -> list[Pet]:
@@ -91,9 +91,11 @@ def update_pet(session: Session, pet_id: UUID, values: dict[str, object]) -> Pet
 
 
 def delete_pet(session: Session, pet_id: UUID) -> None:
+    vlog_service.retry_media_cleanup(session)
+    vlog_service.lock_writes(session)
     pet = get_pet_or_404(session, pet_id)
     ensure_pet_can_be_deleted(session, pet_id)
     ensure_pet_has_no_reminders(session, pet_id)
-    # P2 提案：删除宠物时同步处理关联 Vlog 媒体（文件先回收，失败可重试）。
-    delete_pet_vlogs(session, pet_id)
+    vlog_service.delete_vlogs_for_pet(session, pet_id)
     pet_repository.delete_pet(session, pet)
+    vlog_service.retry_media_cleanup(session)

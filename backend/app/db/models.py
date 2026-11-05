@@ -187,6 +187,12 @@ class VlogMedia(Base):
     )
 
 
+class VlogMediaCleanup(Base):
+    __tablename__ = "vlog_media_cleanup"
+
+    storage_key: Mapped[str] = mapped_column(String(80), primary_key=True)
+
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 

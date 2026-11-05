@@ -1,10 +1,10 @@
 from datetime import date
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
-from app.db.models import DEFAULT_USER_ID, VlogMedia, VlogPost
+from app.db.models import DEFAULT_USER_ID, VlogMedia, VlogMediaCleanup, VlogPost
 
 
 def list_vlogs(
@@ -64,16 +64,6 @@ def get_media_by_key(session: Session, storage_key: str) -> VlogMedia | None:
     return session.scalar(select(VlogMedia).where(VlogMedia.storage_key == storage_key))
 
 
-def list_storage_keys_for_pet(session: Session, pet_id: str) -> list[str]:
-    return list(
-        session.scalars(
-            select(VlogMedia.storage_key)
-            .join(VlogPost, VlogMedia.vlog_id == VlogPost.id)
-            .where(VlogPost.pet_id == pet_id)
-        )
-    )
-
-
 def create_vlog(
     session: Session,
     *,
@@ -105,7 +95,6 @@ def create_vlog(
             )
         )
     session.commit()
-    session.refresh(vlog)
     return vlog
 
 
@@ -119,33 +108,45 @@ def update_vlog(
     return vlog
 
 
+def lock_writes(session: Session) -> None:
+    # SQLite does not lock on SELECT. Serialize the pet check and related writes.
+    if session.get_bind().dialect.name == "sqlite":
+        session.execute(text("BEGIN IMMEDIATE"))
+
+
+def _queue_media_cleanup(session: Session, vlog_ids: list[str]) -> None:
+    media_filter = VlogMedia.vlog_id.in_(vlog_ids)
+    storage_keys = session.scalars(select(VlogMedia.storage_key).where(media_filter))
+    session.add_all(VlogMediaCleanup(storage_key=key) for key in storage_keys)
+    session.execute(delete(VlogMedia).where(media_filter))
+
+
 def delete_vlog(session: Session, vlog: VlogPost) -> None:
-    session.execute(delete(VlogMedia).where(VlogMedia.vlog_id == vlog.id))
+    _queue_media_cleanup(session, [vlog.id])
     session.delete(vlog)
     session.commit()
 
 
-def delete_vlogs_for_pet(session: Session, pet_id: str) -> int:
-    """删除某宠物的全部 Vlog（含媒体元数据），返回删除的条目数。
+def delete_vlogs_for_pet(session: Session, pet_id: str) -> None:
+    pet_vlogs = select(VlogPost.id).where(
+        VlogPost.user_id == DEFAULT_USER_ID,
+        VlogPost.pet_id == pet_id,
+    )
+    vlog_ids = list(session.scalars(pet_vlogs))
+    if vlog_ids:
+        _queue_media_cleanup(session, vlog_ids)
+        session.execute(delete(VlogPost).where(VlogPost.id.in_(vlog_ids)))
 
-    媒体文件的回收由服务层在删除行之前完成（失败可重试）。
-    """
-    vlog_ids = list(
-        session.scalars(
-            select(VlogPost.id).where(
-                VlogPost.user_id == DEFAULT_USER_ID,
-                VlogPost.pet_id == pet_id,
+
+def pending_media_cleanup(session: Session) -> list[str]:
+    return list(session.scalars(select(VlogMediaCleanup.storage_key)))
+
+
+def finish_media_cleanup(session: Session, storage_keys: list[str]) -> None:
+    if storage_keys:
+        session.execute(
+            delete(VlogMediaCleanup).where(
+                VlogMediaCleanup.storage_key.in_(storage_keys)
             )
         )
-    )
-    if not vlog_ids:
-        return 0
-    session.execute(delete(VlogMedia).where(VlogMedia.vlog_id.in_(vlog_ids)))
-    session.execute(
-        delete(VlogPost).where(
-            VlogPost.user_id == DEFAULT_USER_ID,
-            VlogPost.pet_id == pet_id,
-        )
-    )
     session.commit()
-    return len(vlog_ids)

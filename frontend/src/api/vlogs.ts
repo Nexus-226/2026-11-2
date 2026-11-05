@@ -5,13 +5,14 @@ const BASE = "/api/v1/vlogs";
 async function request<T>(
   path: string,
   method = "GET",
-  init?: RequestInit,
+  init?: Omit<RequestInit, "method">,
 ): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${BASE}${path}`, {
-      headers: { Accept: "application/json", ...init?.headers },
       ...init,
+      method,
+      headers: { Accept: "application/json", ...init?.headers },
     });
   } catch {
     throw new Error("无法连接后端，请检查服务后重试。");
@@ -51,11 +52,10 @@ export const vlogClient = {
     data.append("occurred_on", input.occurred_on);
     if (input.caption) data.append("caption", input.caption);
     files.forEach((file) => data.append("files", file));
-    return request("", "POST", { method: "POST", body: data });
+    return request("", "POST", { body: data });
   },
   async update(id: string, input: VlogUpdateInput): Promise<Vlog> {
     return request(`/${encodeURIComponent(id)}`, "PATCH", {
-      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
