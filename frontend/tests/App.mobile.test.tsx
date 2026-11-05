@@ -153,7 +153,10 @@ it("keeps the selected pet across record/reminder/profile pages and family membe
   expect(
     screen.getByRole("button", { name: /当前宠物：豆豆 · 英短/ }),
   ).toBeTruthy();
-  fireEvent.click(nav("待办"));
+  fireEvent.click(nav("我的"));
+  fireEvent.click(
+    screen.getByRole("button", { name: /^待办提醒.*查看和管理宠物待办/ }),
+  );
   await waitFor(() =>
     expect(m.reminders.list).toHaveBeenCalledWith({ pet_id: "cat" }),
   );
@@ -247,7 +250,10 @@ it("real record and reminder clients never receive ids from demo pets", async ()
   expect(
     m.records.list.mock.calls.every(([f]) => f.unlinked === true && !f.pet_id),
   ).toBe(true);
-  fireEvent.click(nav("待办"));
+  fireEvent.click(nav("我的"));
+  fireEvent.click(
+    screen.getByRole("button", { name: /^待办提醒.*查看和管理宠物待办/ }),
+  );
   await waitFor(() => expect(m.reminders.list).toHaveBeenCalled());
   expect(
     m.reminders.list.mock.calls.every(
@@ -293,7 +299,10 @@ it("supports creating a reminder with the existing title/date/source contract", 
   render(<App />);
   await waitFor(() => expect(m.pets.list).toHaveBeenCalled());
   await choose("英短");
-  fireEvent.click(nav("待办"));
+  fireEvent.click(nav("我的"));
+  fireEvent.click(
+    screen.getByRole("button", { name: /^待办提醒.*查看和管理宠物待办/ }),
+  );
   fireEvent.click(
     screen.getByRole("button", { name: "＋ 创建待办", exact: true }),
   );

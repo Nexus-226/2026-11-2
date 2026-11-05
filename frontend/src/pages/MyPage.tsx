@@ -73,7 +73,7 @@ export default function MyPage() {
                 ? `查看与编辑 · ${pet.name} · ${pet.breed || petSpeciesLabel(pet)}`
                 : "选择宠物或创建档案",
             ],
-            ["nearby", "附近服务", "按位置查看周边服务"],
+            ["reminders", "待办提醒", "查看和管理宠物待办"],
             ["lost", "寻宠信息卡", "准备、预览与复制文字卡"],
           ] as const
         ).map(([id, title, description]) => (
