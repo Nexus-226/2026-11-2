@@ -1,0 +1,74 @@
+/* 私人宠物 Vlog（P2）：时间线页样式，复用 records 与全局 tokens。 */
+.vlog-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.vlog-panel {
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #eee);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.vlog-form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+.vlog-media-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted, #777);
+}
+.vlog-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.vlog-entry {
+  border: 1px solid var(--line, #eee);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vlog-entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 600;
+}
+.vlog-entry-head small {
+  color: var(--muted, #777);
+  font-weight: 400;
+}
+.vlog-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.vlog-media-grid img,
+.vlog-media-grid video {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+}
+.vlog-entry-actions {
+  display: flex;
+  gap: 8px;
+}
+.vlog-entry-actions button {
+  cursor: pointer;
+}

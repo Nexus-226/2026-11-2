@@ -1,7 +1,14 @@
 import { useAppScope } from "../../app/AppScope";
 import AppIcon from "../navigation/AppIcon";
 export type AppPage =
-  "chat" | "pets" | "records" | "reminders" | "nearby" | "mine" | "lost";
+  | "chat"
+  | "pets"
+  | "records"
+  | "vlogs"
+  | "reminders"
+  | "nearby"
+  | "mine"
+  | "lost";
 interface AppHeaderProps {
   active: AppPage;
   onNavigate: (page: AppPage) => void;
@@ -33,6 +40,7 @@ export default function AppHeader({
             ["chat", "宠物助手"],
             ["pets", "宠物档案"],
             ["records", "日常记录"],
+            ["vlogs", "宠物 Vlog"],
             ["reminders", "待办提醒"],
             ["nearby", "附近服务"],
             ["lost", "寻宠信息卡"],
@@ -63,6 +71,7 @@ export function AppBottomNav() {
         [
           ["chat", "助手"],
           ["records", "记录"],
+          ["vlogs", "宠物 Vlog"],
           ["nearby", "附近服务"],
           ["mine", "我的"],
         ] as const

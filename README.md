@@ -80,6 +80,8 @@ VITE_RECORD_DATA_SOURCE=api
 VITE_REMINDER_DATA_SOURCE=api
 ```
 
+私人宠物 Vlog 仅用于本机回环环境。视频上传需要系统 PATH 中有 FFmpeg 附带的 `ffprobe`（用 `ffprobe -version` 检查），支持 H.264 视频和可选的 AAC 音轨。图片由随 Python 依赖安装的 [Pillow](https://github.com/python-pillow/Pillow) 12.x（MIT-CMU）校验。视频探测使用 [ffprobe](https://ffmpeg.org/ffprobe.html)，许可证取决于所安装的 FFmpeg 构建。
+
 本地使用 Qwen 或查询真实附近地点时，分别在仓库根目录的 `.env` 中配置 `LLM_API_KEY` 和 `AMAP_WEB_SERVICE_KEY`。其他可选配置见 [.env.example](.env.example)。
 
 开发资料可查阅[技术栈说明](docs/TECH_STACK.md)、[接口文档](docs/API.md)和[项目任务记录](docs/TASKS.md)。

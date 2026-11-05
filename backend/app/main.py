@@ -9,7 +9,16 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app.api.routes import chat, locations, nearby, pets, places, records, reminders
+from app.api.routes import (
+    chat,
+    locations,
+    nearby,
+    pets,
+    places,
+    records,
+    reminders,
+    vlogs,
+)
 from app.db.session import init_db
 
 logger = logging.getLogger(__name__)
@@ -26,6 +35,7 @@ app.include_router(pets.router, prefix="/api/v1/pets", tags=["pets"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["reminders"])
 app.include_router(records.router, prefix="/api/v1/records", tags=["records"])
+app.include_router(vlogs.router, prefix="/api/v1/vlogs", tags=["vlogs"])
 app.include_router(nearby.router, prefix="/api/v1/nearby", tags=["nearby"])
 app.include_router(places.router, prefix="/api/v1/places", tags=["places"])
 app.include_router(locations.router, prefix="/api/v1/locations", tags=["locations"])

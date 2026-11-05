@@ -298,3 +298,44 @@ B 的 Agent Service 适配器将 SQLAlchemy `Session` 绑定在构造时，因�
 实现状态（P1-10）：`POST /api/v1/locations/resolve` 已按上述契约实现（Issue #62 冻结稿）：串行双查高德 v5 `place/text`（适配器收敛为 `AMapLandmarkCandidate`）与 v3 `geocode/geo`（含 `level/city/district` 解析），候选按门址级 geocode → POI → 其余 geocode 排序、两路分别去重、上限 5 条；任一路失败/超时整体 502/504，无匹配 404、未配置 503，无演示回退。前端把用户所选候选作为 `/nearby` 查询中心并以 `center_source=resolved_address` 查询（同时覆盖 POI 与 geocode 选点）；导航链接由前端把 WGS84 转为 GCJ-02 后生成，仅对 `data_source: "amap"` 地点提供且由用户主动打开。新增字段保持结构兼容，但双查改变了候选内容与顺序：旧前端忽略新字段仅作过渡兼容，C 同步展示字段、城市输入与回归测试后才作为新方案验收。测试均使用模拟响应，不消耗真实配额；实施 PR 内以真实 Key 人工验证一次（人民广场/东方明珠/人民大道185号/万达广场/无城市跨城样例，覆盖有无 `city` 两种），结果脱敏回贴 Issue #62。
 
 **P1-7 评审需明确回复：**是否确认 `NearbyResponse` 外壳及空结果/降级状态、HTTP 与 Agent 工具 `center_source` 默认值和原样传递规则、回退沿用原查询中心且允许空演示结果、顶层 `source` 与 `search_center.source` 的字段路径及语义、具体地址由前端自持展示、WGS84/GCJ-02 转换责任和服务端距离过滤、三类地点及排序规则、手动地址解析候选选择与错误行为、拒绝定位时显式选择演示区域的流程，以及详情接口按 ID 来源查询且不跨来源回退。以上未获 A/C 确认前，不据此开始 P1-8/P1-9 的实现。
+
+## P2：私人宠物 Vlog（B 侧，随 [PR #92](https://github.com/Nexus-226/Pet_Agent/pull/92) 提案实现，待审核）
+
+单用户本地版：与既有疫苗、驱虫、体重记录分开存储，按宠物查看时间线。仅限回环环境使用；共享部署前需另行补齐真实身份、媒体访问隔离、位置元数据清理和私有存储。`Vlog` 响应结构（`media` 为文件元数据数组，URL 为经应用路由的相对路径）：
+
+```json
+{
+  "id": "b8f34f24-f5cf-4b5c-8d40-073541725a11",
+  "pet_id": "9a1c2f0e-1111-4b5c-8d40-073541725a99",
+  "caption": "今天去公园",
+  "occurred_on": "2026-11-05",
+  "media": [
+    {
+      "id": "0f2e7c8a-2222-4b5c-8d40-073541725a77",
+      "media_type": "image",
+      "filename": "散步.png",
+      "content_type": "image/png",
+      "size_bytes": 1024,
+      "url": "/api/v1/vlogs/media/5f0e8a1c2b3d4e5f6a7b8c9d0e1f2a3b.png",
+      "created_at": "2026-11-05T08:00:00Z"
+    }
+  ],
+  "created_at": "2026-11-05T08:00:00Z",
+  "updated_at": "2026-11-05T08:00:00Z"
+}
+```
+
+| 方法与路径 | 说明 |
+|---|---|
+| `GET /api/v1/vlogs?pet_id=&from_date=&to_date=` | 时间线列表，`occurred_on` 倒序；`pet_id` 不存在返回 `404 PET_NOT_FOUND`；`from_date` 晚于 `to_date` 返回 `400 BAD_REQUEST` |
+| `POST /api/v1/vlogs` | 创建（multipart 表单）：`pet_id`、`occurred_on`、`caption?`、`files?`；每篇最多 3 张 JPEG/PNG（每张 5 MB）或 1 段 MP4（20 MB），不可混用；`caption` 去首尾空白后允许为空，最长 2000 字符 |
+| `GET /api/v1/vlogs/{id}` | 单条详情；不存在返回 `404 VLOG_NOT_FOUND` |
+| `PATCH /api/v1/vlogs/{id}` | 编辑（JSON）：`caption?`（显式 `null` 表示清空）、`occurred_on?`；至少一个字段；首版不支持替换媒体，删除后重建 |
+| `DELETE /api/v1/vlogs/{id}` | 删除条目并撤销媒体访问，`204`。文件回收失败时保留待办 |
+| `GET /api/v1/vlogs/media/{storage_key}` | 经应用路由读取媒体（`FileResponse`）；键由服务端生成，不信任客户端路径 |
+
+- 日期沿用共同规则：`occurred_on` 不得晚于上海时区今天（`422 VALIDATION_ERROR`）。
+- 媒体按文件头识别候选格式，再解码 JPEG/PNG 或用 ffprobe 检查 MP4 容器与媒体流。MP4 首版支持 H.264 视频，音轨可选 AAC。视频校验程序不可用时返回 `VLOG_MEDIA_PROBE_UNAVAILABLE`（503，可重试）；`400` 错误码：`VLOG_MEDIA_UNSUPPORTED`、`VLOG_MEDIA_TOO_LARGE`、`VLOG_MEDIA_TOO_MANY`、`VLOG_MEDIA_MIXED`、`VLOG_MEDIA_EMPTY`。
+- 媒体文件保存在本地私有目录（默认 `./vlog-media`，已加入 `.gitignore`；`PET_AGENT_VLOG_MEDIA_DIR` 可指向仓库外目录），数据库只存条目与文件元数据。
+- 写盘或入库失败会尝试清理包括当前半成品在内的已写入文件，并返回 `VLOG_MEDIA_STORAGE_FAILED`（500，`retryable=true`）。删除条目或宠物时，数据库在同一事务撤销媒体访问并登记待回收文件，提交后尝试清理。磁盘清理失败时删除仍返回 `204`，下次删除宠物或 Vlog 时自动重试。对已删除资源重复发送 DELETE 仍返回 `404`。
+- 删除宠物会删除其全部 Vlog（含纯文字条目）并回收媒体；宠物仍被记录/提醒引用时的 `PET_IN_USE`（409）行为保持不变。

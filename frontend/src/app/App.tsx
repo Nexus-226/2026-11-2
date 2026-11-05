@@ -1,4 +1,5 @@
 import RecordsPage from "../pages/RecordsPage";
+import VlogPage from "../pages/VlogPage";
 import RemindersPage from "../pages/RemindersPage";
 import NearbyPage from "../pages/NearbyPage";
 import ChatPage from "../pages/ChatPage";
@@ -23,6 +24,7 @@ function AppContent() {
         <ChatPage active={page === "chat"} onNavigate={navigate} />
       </div>
       {page === "records" && <RecordsPage onNavigate={navigate} />}{" "}
+      {page === "vlogs" && <VlogPage onNavigate={navigate} />}{" "}
       {page === "reminders" && <RemindersPage onNavigate={navigate} />}{" "}
       {page === "nearby" && <NearbyPage onNavigate={navigate} />}{" "}
       {page === "pets" && <PetProfilePage onNavigate={navigate} />}{" "}
